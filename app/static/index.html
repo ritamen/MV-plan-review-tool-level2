@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ARK Energy | M&amp;V Plan Review Tool</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --ark-blue:   #0D6079;
+      --ark-orange: #F79428;
+      --ark-navy1:  #060C2E;
+      --ark-navy2:  #08133A;
+      --ark-navy3:  #0B1A4A;
+      --ark-black:  #000000;
+    }
+
+    html, body {
+      font-family: "Trebuchet MS", Arial, sans-serif;
+      font-size: 15px;
+      color: var(--ark-black);
+      background: #f5f7fa;
+      min-height: 100vh;
+    }
+
+    /* ── Nav ─────────────────────────────────────────────────────────────── */
+    .ark-nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+      background: linear-gradient(90deg, var(--ark-navy1) 0%, var(--ark-navy2) 45%, var(--ark-navy3) 100%);
+      padding: 12px 18px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+    }
+    .ark-nav-inner {
+      max-width: 98vw; margin: 0 auto;
+      border-radius: 14px; padding: 10px 14px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .ark-nav-left { display: flex; align-items: center; gap: 14px; }
+    .ark-nav-title { color: white; font-size: 22px; font-weight: 900; line-height: 1.2; }
+    .pill {
+      border-radius: 999px; padding: 8px 14px; font-size: 14px; font-weight: 900;
+      border: 1px solid rgba(255,255,255,0.25); color: white; background: transparent; white-space: nowrap;
+    }
+
+    /* ── Layout ──────────────────────────────────────────────────────────── */
+    .main-content {
+      padding-top: 115px; padding-bottom: 48px;
+      max-width: 960px; margin: 0 auto;
+      padding-left: 24px; padding-right: 24px;
+    }
+
+    /* ── Section headers ─────────────────────────────────────────────────── */
+    .ark-section { margin-top: 28px; margin-bottom: 4px; display: flex; align-items: baseline; gap: 10px; }
+    .ark-section-title { font-size: 18px; font-weight: 900; color: var(--ark-blue); white-space: nowrap; }
+    .ark-section-rule { height: 2px; background: rgba(13,96,121,0.25); width: 100%; margin-top: 4px; margin-bottom: 18px; }
+
+    /* ── Upload grid ─────────────────────────────────────────────────────── */
+    .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 640px) { .upload-grid { grid-template-columns: 1fr; } }
+
+    /* ── Upload card ─────────────────────────────────────────────────────── */
+    .upload-card {
+      background: white; border: 2px dashed rgba(13,96,121,0.35); border-radius: 14px;
+      padding: 28px 20px; display: flex; flex-direction: column; align-items: center; gap: 10px;
+      cursor: pointer; transition: border-color 0.2s, background 0.2s; position: relative;
+    }
+    .upload-card:hover, .upload-card.drag-over { border-color: var(--ark-blue); background: rgba(13,96,121,0.04); }
+    .upload-card input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .upload-icon { font-size: 32px; line-height: 1; }
+    .upload-label { font-size: 15px; font-weight: 700; color: var(--ark-blue); text-align: center; }
+    .upload-hint { font-size: 12px; color: #666; text-align: center; }
+    .upload-badge { display: inline-block; border-radius: 999px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
+    .badge-required { background: #ffecd0; color: #c25d00; }
+    .badge-optional  { background: #e0eef4; color: #0D6079; }
+    .file-name { font-size: 13px; color: var(--ark-blue); font-weight: 600; text-align: center; word-break: break-all; display: none; }
+    .upload-card.has-file .file-name { display: block; }
+    .upload-card.has-file { border-color: var(--ark-blue); border-style: solid; }
+
+    /* ── Text inputs (Submission details) ────────────────────────────────── */
+    .input-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 16px; }
+    .input-group label { font-size: 15px; font-weight: 700; color: var(--ark-black); }
+    .input-group input[type="text"] {
+      font-family: "Trebuchet MS", Arial, sans-serif;
+      font-size: 15px; color: var(--ark-black);
+      border: 1px solid rgba(13,96,121,0.3); border-radius: 8px;
+      padding: 10px 14px; outline: none; background: white;
+      transition: border-color 0.2s;
+      width: 100%;
+    }
+    .input-group input[type="text"]:focus { border-color: var(--ark-blue); box-shadow: 0 0 0 3px rgba(13,96,121,0.1); }
+
+    /* ── Run button ──────────────────────────────────────────────────────── */
+    .run-row { display: flex; justify-content: flex-end; margin-top: 8px; }
+    .btn-run {
+      background: var(--ark-orange); color: white;
+      font-family: "Trebuchet MS", Arial, sans-serif;
+      font-size: 22px; font-weight: 900;
+      border: none; border-radius: 14px;
+      padding: 14px 40px; height: 64px;
+      cursor: pointer; box-shadow: 0 8px 20px rgba(247,148,40,0.25);
+      transition: background 0.2s; min-width: 260px;
+    }
+    .btn-run:hover { background: var(--ark-blue); }
+    .btn-run:disabled { background: #ccc; cursor: not-allowed; box-shadow: none; }
+
+    /* ── Progress ────────────────────────────────────────────────────────── */
+    .progress-box {
+      display: none; background: white; border-radius: 14px;
+      padding: 32px 24px; box-shadow: 0 4px 14px rgba(0,0,0,0.07);
+      text-align: center; margin-top: 24px;
+    }
+    .progress-box.visible { display: block; }
+    .progress-spinner {
+      width: 48px; height: 48px;
+      border: 5px solid rgba(13,96,121,0.15); border-top-color: var(--ark-blue);
+      border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .progress-text { font-size: 15px; font-weight: 700; color: var(--ark-blue); margin-bottom: 6px; }
+    .progress-sub { font-size: 13px; color: #666; }
+
+    /* ── Results ─────────────────────────────────────────────────────────── */
+    .results-box { display: none; margin-top: 24px; }
+    .results-box.visible { display: block; }
+
+    .results-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+    @media (max-width: 600px) { .results-grid { grid-template-columns: 1fr 1fr; } }
+
+    .stat-card { background: white; border-radius: 12px; padding: 18px 16px; text-align: center; box-shadow: 0 3px 10px rgba(0,0,0,0.06); }
+    .stat-number { font-size: 32px; font-weight: 900; line-height: 1; margin-bottom: 6px; }
+    .stat-label  { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #555; }
+    .stat-total    .stat-number { color: var(--ark-blue); }
+    .stat-approved .stat-number { color: #375623; }
+    .stat-na       .stat-number { color: #9C0006; }
+    .stat-inc      .stat-number { color: #9C6500; }
+
+    .missing-box {
+      background: #fff8e1; border: 1px solid #ffe082; border-radius: 10px;
+      padding: 14px 16px; margin-bottom: 18px; font-size: 13px;
+    }
+    .missing-box strong { color: #9C6500; }
+
+    .success-banner {
+      background: #f0faf2; border: 1px solid #b7dfbe; border-radius: 10px;
+      padding: 14px 16px; margin-bottom: 18px; font-size: 14px; font-weight: 600; color: #375623;
+    }
+
+    .btn-download {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--ark-blue); color: white;
+      font-family: "Trebuchet MS", Arial, sans-serif;
+      font-size: 17px; font-weight: 900;
+      border: none; border-radius: 12px; padding: 14px 30px;
+      cursor: pointer; text-decoration: none; transition: background 0.2s;
+      box-shadow: 0 6px 16px rgba(13,96,121,0.22);
+    }
+    .btn-download:hover { background: var(--ark-navy2); }
+
+    /* ── Error ───────────────────────────────────────────────────────────── */
+    .error-box {
+      display: none; background: #fff0f0; border: 1px solid #ffcdd2;
+      border-radius: 10px; padding: 16px 18px; margin-top: 20px;
+      color: #c62828; font-size: 14px; font-weight: 600;
+    }
+    .error-box.visible { display: block; }
+  </style>
+</head>
+<body>
+
+  <!-- Nav -->
+  <nav class="ark-nav">
+    <div class="ark-nav-inner">
+      <div class="ark-nav-left">
+        <img src="/static/arklogo2.png" style="height:68px;width:auto;display:block;" alt="ARK Energy" />
+        <div class="ark-nav-title">M&amp;V Plan Review Tool</div>
+      </div>
+      <div class="pill">AI Assistant</div>
+    </div>
+  </nav>
+
+  <div class="main-content">
+
+    <!-- ── Upload documents ────────────────────────────────────────────── -->
+    <div class="ark-section">
+      <div class="ark-section-title">Upload documents</div>
+    </div>
+    <div class="ark-section-rule"></div>
+
+    <div class="upload-grid">
+      <div class="upload-card" id="mv-card">
+        <input type="file" id="mv-input" accept=".pdf,application/pdf" />
+        <div class="upload-icon">📄</div>
+        <div class="upload-label">M&amp;V Plan</div>
+        <span class="upload-badge badge-required">Required</span>
+        <div class="upload-hint">Click or drag a PDF here</div>
+        <div class="file-name" id="mv-filename"></div>
+      </div>
+
+      <div class="upload-card" id="iga-card">
+        <input type="file" id="iga-input" accept=".pdf,application/pdf" />
+        <div class="upload-icon">📑</div>
+        <div class="upload-label">IGA Document</div>
+        <span class="upload-badge badge-optional">Optional</span>
+        <div class="upload-hint">Click or drag a PDF here</div>
+        <div class="file-name" id="iga-filename"></div>
+      </div>
+    </div>
+
+    <!-- ── Submission details ──────────────────────────────────────────── -->
+    <div class="ark-section">
+      <div class="ark-section-title">Submission details</div>
+    </div>
+    <div class="ark-section-rule"></div>
+
+    <div class="input-group">
+      <label for="ref-no">Ref. No.</label>
+      <input type="text" id="ref-no" placeholder="e.g. ECTP-MV-2026-001" />
+    </div>
+    <div class="input-group">
+      <label for="esp-name">ESP's Name</label>
+      <input type="text" id="esp-name" placeholder="e.g. Schneider Electric" />
+    </div>
+
+    <!-- ── Generate button ────────────────────────────────────────────── -->
+    <div class="run-row">
+      <button class="btn-run" id="run-btn" disabled>Generate Comments</button>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress-box" id="progress-box">
+      <div class="progress-spinner"></div>
+      <div class="progress-text">Reviewing M&amp;V Plan…</div>
+      <div class="progress-sub">This may take 1–2 minutes. Please do not close this page.</div>
+    </div>
+
+    <!-- Error -->
+    <div class="error-box" id="error-box"></div>
+
+    <!-- ── Results ────────────────────────────────────────────────────── -->
+    <div class="results-box" id="results-box">
+      <div class="ark-section">
+        <div class="ark-section-title">Results</div>
+      </div>
+      <div class="ark-section-rule"></div>
+
+      <div class="success-banner" id="success-banner">Review completed successfully.</div>
+
+      <div class="results-grid">
+        <div class="stat-card stat-total">
+          <div class="stat-number" id="stat-total">—</div>
+          <div class="stat-label">Questions reviewed</div>
+        </div>
+        <div class="stat-card stat-approved">
+          <div class="stat-number" id="stat-approved">—</div>
+          <div class="stat-label">Approved</div>
+        </div>
+        <div class="stat-card stat-na">
+          <div class="stat-number" id="stat-na">—</div>
+          <div class="stat-label">Not Approved</div>
+        </div>
+        <div class="stat-card stat-inc">
+          <div class="stat-number" id="stat-inc">—</div>
+          <div class="stat-label">Incomplete</div>
+        </div>
+      </div>
+
+      <div class="missing-box" id="missing-box" style="display:none;"></div>
+
+      <a class="btn-download" id="download-link" href="#" download="">
+        ⬇&nbsp; Download Excel Output
+      </a>
+    </div>
+
+  </div><!-- /main-content -->
+
+  <script>
+    const mvInput     = document.getElementById("mv-input");
+    const igaInput    = document.getElementById("iga-input");
+    const mvCard      = document.getElementById("mv-card");
+    const igaCard     = document.getElementById("iga-card");
+    const mvFilename  = document.getElementById("mv-filename");
+    const igaFilename = document.getElementById("iga-filename");
+    const runBtn      = document.getElementById("run-btn");
+    const progressBox = document.getElementById("progress-box");
+    const errorBox    = document.getElementById("error-box");
+    const resultsBox  = document.getElementById("results-box");
+    const missingBox  = document.getElementById("missing-box");
+    const downloadLink= document.getElementById("download-link");
+    const refNoInput  = document.getElementById("ref-no");
+    const espNameInput= document.getElementById("esp-name");
+
+    // ── File selection ────────────────────────────────────────────────────
+    function setFile(card, filenameEl, input) {
+      const file = input.files[0];
+      if (file) { filenameEl.textContent = file.name; card.classList.add("has-file"); }
+      else       { filenameEl.textContent = "";        card.classList.remove("has-file"); }
+      runBtn.disabled = !mvInput.files.length;
+    }
+
+    mvInput.addEventListener("change",  () => setFile(mvCard,  mvFilename,  mvInput));
+    igaInput.addEventListener("change", () => setFile(igaCard, igaFilename, igaInput));
+
+    [mvCard, igaCard].forEach(card => {
+      card.addEventListener("dragover",  e => { e.preventDefault(); card.classList.add("drag-over"); });
+      card.addEventListener("dragleave", ()  => card.classList.remove("drag-over"));
+      card.addEventListener("drop",      e  => { e.preventDefault(); card.classList.remove("drag-over"); });
+    });
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+    function showError(msg) { errorBox.textContent = "Error: " + msg; errorBox.classList.add("visible"); }
+    function clearError()   { errorBox.classList.remove("visible"); errorBox.textContent = ""; }
+    function showProgress() { progressBox.classList.add("visible"); }
+    function hideProgress() { progressBox.classList.remove("visible"); }
+
+    // ── Run ───────────────────────────────────────────────────────────────
+    runBtn.addEventListener("click", async () => {
+      if (!mvInput.files.length) return;
+      clearError();
+      resultsBox.classList.remove("visible");
+      showProgress();
+      runBtn.disabled = true;
+
+      const form = new FormData();
+      form.append("mv_plan",  mvInput.files[0]);
+      if (igaInput.files.length) form.append("iga", igaInput.files[0]);
+      form.append("ref_no",   refNoInput.value.trim());
+      form.append("esp_name", espNameInput.value.trim());
+
+      let data;
+      try {
+        const origin = (window.location.protocol === "http:" || window.location.protocol === "https:")
+          ? window.location.origin : "http://localhost:8000";
+        const resp = await fetch(origin + "/review", { method: "POST", body: form });
+        if (!resp.ok) {
+          let detail = "Unknown error";
+          try { const j = await resp.json(); detail = j.detail || detail; } catch(_) {}
+          throw new Error(detail);
+        }
+        data = await resp.json();
+      } catch(err) {
+        hideProgress();
+        runBtn.disabled = false;
+        showError(err.message || String(err));
+        return;
+      }
+
+      hideProgress();
+
+      // Populate stats
+      const s = data.summary;
+      document.getElementById("stat-total").textContent    = s.total;
+      document.getElementById("stat-approved").textContent = s.approved;
+      document.getElementById("stat-na").textContent       = s.not_approved;
+      document.getElementById("stat-inc").textContent      = s.incomplete;
+
+      if (s.missing_sns && s.missing_sns.length) {
+        missingBox.innerHTML = `<strong>Warning — missing SNs:</strong> The following questions were not returned by the AI and have been left blank in the output: <strong>${s.missing_sns.join(", ")}</strong>`;
+        missingBox.style.display = "block";
+      } else {
+        missingBox.style.display = "none";
+      }
+
+      // Build download link
+      const bytes = Uint8Array.from(atob(data.excel_b64), c => c.charCodeAt(0));
+      const blob  = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      downloadLink.href     = URL.createObjectURL(blob);
+      downloadLink.download = data.filename;
+
+      resultsBox.classList.add("visible");
+      runBtn.disabled = false;
+    });
+  </script>
+</body>
+</html>
