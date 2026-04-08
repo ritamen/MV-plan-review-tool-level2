@@ -74,6 +74,14 @@ MAX_TOKENS     = 8000
 THINKING_TOKENS = 5000
 TIMEOUT_SECS   = 180
 
+# Character budget for IGA text extraction.
+# Native PDFs cost ~1 500 tokens/page regardless of content density.
+# Text extraction is far cheaper for text-heavy IGA documents.
+# The IGA is ALWAYS sent as extracted text (never native PDF) so the budget
+# is predictable.  At ~4 chars/token, 400 000 chars ≈ 100 000 tokens,
+# leaving ~100 000 tokens for the system prompt, M&V Plan, and output.
+MAX_IGA_TEXT_CHARS = 400_000
+
 VALID_INCLUDED = {"Yes", "No", "Partial"}
 VALID_STATUS   = {"Approved", "Not Approved", "Incomplete"}
 
@@ -103,14 +111,37 @@ def _pdf_page_count(pdf_bytes: bytes) -> int:
     return len(PdfReader(io.BytesIO(pdf_bytes)).pages)
 
 
-def _pdf_to_text(pdf_bytes: bytes, label: str) -> str:
-    """Extract full text from a PDF using pypdf."""
+def _pdf_to_text(pdf_bytes: bytes, label: str, max_chars: Optional[int] = None) -> str:
+    """
+    Extract text from every page of a PDF using pypdf.
+
+    If max_chars is set, extraction stops once the accumulated text would
+    exceed that limit, and a truncation notice is appended so the model is
+    aware that some pages were not included.
+    """
     reader = PdfReader(io.BytesIO(pdf_bytes))
-    pages = []
+    total_pages = len(reader.pages)
+    parts: list[str] = []
+    chars_so_far = 0
+    stopped_at: Optional[int] = None
+
     for i, page in enumerate(reader.pages, 1):
-        text = page.extract_text() or ""
-        pages.append(f"--- {label} | Page {i} ---\n{text}")
-    return "\n\n".join(pages)
+        chunk = f"--- {label} | Page {i} ---\n{page.extract_text() or ''}"
+        if max_chars is not None and chars_so_far + len(chunk) > max_chars:
+            stopped_at = i
+            break
+        parts.append(chunk)
+        chars_so_far += len(chunk)
+
+    result = "\n\n".join(parts)
+    if stopped_at is not None:
+        omitted = total_pages - stopped_at + 1
+        result += (
+            f"\n\n[NOTE: {label} was truncated after page {stopped_at - 1} of "
+            f"{total_pages} (≈{chars_so_far:,} chars extracted). "
+            f"{omitted} page(s) were omitted to stay within the token limit.]"
+        )
+    return result
 
 
 def _strip_fences(text: str) -> str:
@@ -174,12 +205,19 @@ def _parse_and_validate(raw: str) -> Tuple[list, List[str]]:
     return items, errors
 
 
-def _add_pdf_to_content(content: list, pdf_bytes: bytes, label: str) -> None:
+def _add_pdf_to_content(
+    content: list,
+    pdf_bytes: bytes,
+    label: str,
+    max_chars: Optional[int] = None,
+) -> None:
     """
     Add a PDF to the content list.
-    - If the PDF is within the API page limit: send as a native base64 document block.
-    - If it exceeds the limit: extract full text with pypdf and send as a text block.
-      This preserves all document content; the model reviews text identically.
+
+    - If the PDF is within the native-PDF page limit (≤ MAX_PDF_PAGES):
+      send as a base64 document block so Claude can use its vision renderer.
+    - Otherwise: extract text from *all* pages with pypdf and send as a text
+      block, truncating at max_chars if provided to stay within the token limit.
     """
     pages = _pdf_page_count(pdf_bytes)
     if pages <= MAX_PDF_PAGES:
@@ -194,19 +232,50 @@ def _add_pdf_to_content(content: list, pdf_bytes: bytes, label: str) -> None:
         })
         logger.info("%s: %d pages — sent as native PDF", label, pages)
     else:
-        extracted = _pdf_to_text(pdf_bytes, label)
+        extracted = _pdf_to_text(pdf_bytes, label, max_chars=max_chars)
         content.append({
             "type": "text",
-            "text": f"=== {label} ({pages} pages — full text extracted) ===\n\n{extracted}",
+            "text": (
+                f"=== {label} ({pages} pages total — full text extracted) ===\n\n"
+                f"{extracted}"
+            ),
         })
-        logger.info("%s: %d pages — exceeds API limit, sent as extracted text", label, pages)
+        logger.info(
+            "%s: %d pages — exceeds native-PDF limit, sent as extracted text "
+            "(char budget: %s)",
+            label, pages, f"{max_chars:,}" if max_chars else "unlimited",
+        )
+
+
+def _add_iga_to_content(content: list, iga_bytes: bytes) -> None:
+    """
+    Always send the IGA as extracted text, never as a native PDF.
+
+    Native PDFs cost ~1 500 tokens/page regardless of text density; for a
+    typical 60–200 page IGA that easily blows the 200 000-token limit when
+    combined with the M&V Plan.  Text extraction costs only what the actual
+    text contains, and the character budget keeps us safely under the limit.
+    """
+    pages = _pdf_page_count(iga_bytes)
+    extracted = _pdf_to_text(iga_bytes, "IGA Document", max_chars=MAX_IGA_TEXT_CHARS)
+    content.append({
+        "type": "text",
+        "text": (
+            f"=== IGA Document ({pages} pages total — text extracted) ===\n\n"
+            f"{extracted}"
+        ),
+    })
+    logger.info(
+        "IGA Document: %d pages — always sent as extracted text (char budget: %s)",
+        pages, f"{MAX_IGA_TEXT_CHARS:,}",
+    )
 
 
 def _build_user_content(mv_bytes: bytes, iga_bytes: Optional[bytes]) -> list:
     content: list = []
     _add_pdf_to_content(content, mv_bytes, "M&V Plan")
     if iga_bytes:
-        _add_pdf_to_content(content, iga_bytes, "IGA Document")
+        _add_iga_to_content(content, iga_bytes)
     content.append({
         "type": "text",
         "text": (
@@ -339,6 +408,20 @@ async def review(
                     ),
                 )
 
+    except anthropic.BadRequestError as exc:
+        msg = str(exc)
+        if "prompt is too long" in msg or "token" in msg.lower():
+            logger.error("Prompt too long for Claude API: %s", msg)
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    "The combined documents are too large for the AI to process "
+                    f"(exceeded the 200 000-token limit). "
+                    "Try uploading a shorter IGA document, or split it into smaller sections."
+                ),
+            )
+        logger.error("Claude API bad request: %s", msg)
+        raise HTTPException(status_code=400, detail=f"API request error: {msg}")
     except anthropic.APITimeoutError:
         logger.error("Claude API call timed out after %ds", TIMEOUT_SECS)
         raise HTTPException(

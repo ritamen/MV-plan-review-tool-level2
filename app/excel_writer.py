@@ -88,7 +88,8 @@ def _is_section_header(value) -> bool:
         return False  # unparseable as float → multi-part SN like "6.3.1", treat as question row
 
 
-def write_review(template_bytes: bytes, review_by_sn: dict) -> bytes:
+def write_review(template_bytes: bytes, review_by_sn: dict,
+                 ref_no: str = "", esp_name: str = "", facility_name: str = "") -> bytes:
     """
     Load the Excel template from bytes, write review results, return as bytes.
 
@@ -98,6 +99,9 @@ def write_review(template_bytes: bytes, review_by_sn: dict) -> bytes:
         Raw bytes of the M&V Plan Review Sheet template.
     review_by_sn  : dict
         Dict keyed by SN string -> {"included": ..., "status": ..., "comment": ...}
+    ref_no        : str  Reference number written to the review sheet and cover page.
+    esp_name      : str  ESP name written to the cover page.
+    facility_name : str  Facility name written to the review sheet.
 
     Returns
     -------
@@ -135,6 +139,23 @@ def write_review(template_bytes: bytes, review_by_sn: dict) -> bytes:
         if cell.value and "Last Updated" in str(cell.value):
             cell.value = f"Last Updated: {today_str}"
             break
+
+    # ── Facility Name (row 6, col C) and Ref. No. (row 7, col C) ─────────────
+    if facility_name:
+        ws.cell(row=6, column=3).value = facility_name
+    if ref_no:
+        ws.cell(row=7, column=3).value = ref_no
+
+    # ── Cover Page ────────────────────────────────────────────────────────────
+    if "Cover Page" in wb.sheetnames:
+        cp = wb["Cover Page"]
+        # Date (row 12, col B)
+        cp.cell(row=12, column=2).value = today_str
+        # ESP name (row 13, col B)
+        if esp_name:
+            cp.cell(row=13, column=2).value = esp_name
+        # Date of Last Status (row 16, col F)
+        cp.cell(row=16, column=6).value = today_str
 
     # Round 1 row (row 15): Issued On (col C=3), Received on (col D=4), Reviewed on (col E=5)
     for col in (3, 4, 5):

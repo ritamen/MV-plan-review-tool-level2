@@ -6,10 +6,10 @@ import logging
 import os
 import re
 import sys
-import traceback
 from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as components
 from dotenv import load_dotenv
 from pypdf import PdfReader
 
@@ -36,6 +36,7 @@ MAX_TOKENS      = 8000
 THINKING_TOKENS = 5000
 TIMEOUT_SECS    = 180
 MAX_PDF_PAGES   = 100
+MAX_SUPPORTING_TEXT_CHARS = 400_000
 
 VALID_INCLUDED = {"Yes", "No", "Partial"}
 VALID_STATUS   = {"Approved", "Not Approved", "Incomplete"}
@@ -54,13 +55,28 @@ def _encode_pdf(data: bytes) -> str:
 def _pdf_page_count(pdf_bytes: bytes) -> int:
     return len(PdfReader(io.BytesIO(pdf_bytes)).pages)
 
-def _pdf_to_text(pdf_bytes: bytes, label: str) -> str:
+def _pdf_to_text(pdf_bytes: bytes, label: str, max_chars: int | None = None) -> str:
     reader = PdfReader(io.BytesIO(pdf_bytes))
-    pages = []
+    total_pages = len(reader.pages)
+    parts = []
+    chars_so_far = 0
+    stopped_at = None
     for i, page in enumerate(reader.pages, 1):
-        text = page.extract_text() or ""
-        pages.append(f"--- {label} | Page {i} ---\n{text}")
-    return "\n\n".join(pages)
+        chunk = f"--- {label} | Page {i} ---\n{page.extract_text() or ''}"
+        if max_chars is not None and chars_so_far + len(chunk) > max_chars:
+            stopped_at = i
+            break
+        parts.append(chunk)
+        chars_so_far += len(chunk)
+    result = "\n\n".join(parts)
+    if stopped_at is not None:
+        omitted = total_pages - stopped_at + 1
+        result += (
+            f"\n\n[NOTE: {label} was truncated after page {stopped_at - 1} of "
+            f"{total_pages} ({chars_so_far:,} chars extracted). "
+            f"{omitted} page(s) omitted to stay within the token limit.]"
+        )
+    return result
 
 def _strip_fences(text: str) -> str:
     text = text.strip()
@@ -113,11 +129,19 @@ def _add_pdf_to_content(content: list, pdf_bytes: bytes, label: str) -> None:
             "text": f"=== {label} ({pages} pages — full text extracted) ===\n\n{extracted}",
         })
 
+def _add_supporting_to_content(content: list, pdf_bytes: bytes, label: str) -> None:
+    pages = _pdf_page_count(pdf_bytes)
+    extracted = _pdf_to_text(pdf_bytes, label, max_chars=MAX_SUPPORTING_TEXT_CHARS)
+    content.append({
+        "type": "text",
+        "text": f"=== {label} ({pages} pages — text extracted) ===\n\n{extracted}",
+    })
+
 def _build_user_content(mv_bytes: bytes, supporting_bytes: list):
     content = []
     _add_pdf_to_content(content, mv_bytes, "M&V Plan")
     for i, b in enumerate(supporting_bytes or [], 1):
-        _add_pdf_to_content(content, b, f"Supporting Document {i}")
+        _add_supporting_to_content(content, b, f"Supporting Document {i}")
     content.append({
         "type": "text",
         "text": (
@@ -165,7 +189,7 @@ def _call_claude_retry(client, user_content: list, first_raw: str) -> str:
     )
     return _extract_json_text(response)
 
-def run_mv_review(mv_bytes, supporting_bytes, ref_no, esp_name, mv_filename, debug_chunks=False):
+def run_mv_review(mv_bytes, supporting_bytes, ref_no, esp_name, mv_filename, facility_name="", debug_chunks=False):
     import anthropic
 
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -175,7 +199,18 @@ def run_mv_review(mv_bytes, supporting_bytes, ref_no, esp_name, mv_filename, deb
     client = anthropic.Anthropic(api_key=api_key)
     user_content = _build_user_content(mv_bytes, supporting_bytes)
 
-    raw = _call_claude(client, user_content)
+    try:
+        raw = _call_claude(client, user_content)
+    except anthropic.BadRequestError as exc:
+        msg = str(exc)
+        if "prompt is too long" in msg or "token" in msg.lower():
+            raise RuntimeError(
+                "The combined documents are too large for the AI to process "
+                "(exceeded the 200,000-token limit). "
+                "Try uploading a shorter IGA document or split it into smaller sections."
+            ) from exc
+        raise
+
     items, errors = _parse_and_validate(raw)
 
     if errors:
@@ -194,7 +229,9 @@ def run_mv_review(mv_bytes, supporting_bytes, ref_no, esp_name, mv_filename, deb
     incomplete   = sum(1 for it in items if it.get("status") == "Incomplete")
     total        = len(items)
 
-    filled_bytes = write_review(TEMPLATE_BYTES, review_by_sn)
+    filled_bytes = write_review(TEMPLATE_BYTES, review_by_sn,
+                               ref_no=ref_no, esp_name=esp_name,
+                               facility_name=facility_name)
 
     base_name = mv_filename.replace(".pdf", "")
     parts = ["MV_Plan_Review"]
@@ -214,6 +251,43 @@ def run_mv_review(mv_bytes, supporting_bytes, ref_no, esp_name, mv_filename, deb
     }
 
 
+def _extract_submission_metadata(pdf_bytes: bytes) -> dict:
+    """
+    Extract Ref. No., ESP name, and Facility Name from the first pages of the
+    M&V Plan PDF using a fast Claude call.  Returns a dict with keys
+    ref_no, esp_name, facility_name (empty strings if not found).
+    """
+    import anthropic
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return {}
+    try:
+        text = _pdf_to_text(pdf_bytes, "M&V Plan", max_chars=12_000)
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            messages=[{
+                "role": "user",
+                "content": (
+                    "Read the following text extracted from an M&V Plan document "
+                    "and extract exactly three fields.\n"
+                    "Return ONLY a JSON object — no markdown, no explanation — with "
+                    "these keys:\n"
+                    "  ref_no        – the reference / document number\n"
+                    "  esp_name      – the name of the Energy Service Provider (ESP / contractor)\n"
+                    "  facility_name – the name of the facility or project site\n"
+                    "Use an empty string for any field you cannot find.\n\n"
+                    f"{text}"
+                ),
+            }],
+        )
+        raw = response.content[0].text.strip()
+        return json.loads(_strip_fences(raw))
+    except Exception:
+        return {}
+
+
 class StreamlitLogger:
     def __init__(self, container):
         self.container = container
@@ -225,13 +299,12 @@ class StreamlitLogger:
 
 
 # ============================================================
-# UI  –  identical to streamlit_app 1.py
+# UI
 # ============================================================
 
-# ---------------- Page config ----------------
 st.set_page_config(page_title="ARK Energy | M&V Plan Review Tool", layout="wide")
 
-# ---------------- ARK Theme CSS ----------------
+# ---------------- CSS — identical to Engineering Document Reviewer ----------------
 st.markdown(
     """
     <style>
@@ -262,114 +335,129 @@ st.markdown(
 
     .ark-nav {
         position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
+        top: 0; left: 0; right: 0;
         z-index: 9999;
         background: linear-gradient(90deg,#060C2E 0%,#08133A 45%,#0B1A4A 100%);
         padding: 12px 18px;
         box-shadow: 0 6px 18px rgba(0,0,0,0.35);
     }
-
     .ark-nav-inner{
-        width: 98vw;
-        margin: 0 auto;
-        border-radius: 14px;
-        padding: 10px 14px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
+        width: 98vw; margin: 0 auto; border-radius: 14px; padding: 10px 14px;
+        display: flex; align-items: center; justify-content: space-between;
         background: linear-gradient(90deg,#060C2E 0%,#08133A 45%,#0B1A4A 100%);
     }
-
     .ark-nav-left { display:flex; align-items:center; gap:14px; }
-
-    .ark-nav-title {
-        color: white !important;
-        font-size: 22px !important;
-        font-weight: 900;
-        line-height: 1.2;
-        margin: 0;
-    }
-
+    .ark-nav-title { color:white !important; font-size:22px !important; font-weight:900; line-height:1.2; margin:0; }
+    .ark-nav-right { display:flex; align-items:center; gap:10px; }
     .pill {
-        border-radius: 999px;
-        padding: 8px 14px;
-        font-size: 14px;
-        font-weight: 900;
-        border: 1px solid rgba(255,255,255,0.25);
-        color: white !important;
-        background: transparent;
-        white-space: nowrap;
+        border-radius:999px; padding:8px 14px; font-size:14px; font-weight:900;
+        border:1px solid rgba(255,255,255,0.25); color:white !important; background:transparent; white-space:nowrap;
     }
 
     .ark-section { margin-top:10px; margin-bottom:6px; display:flex; align-items:baseline; gap:10px; }
     .ark-section-title { font-size:18px; font-weight:900; color:var(--ark-blue); margin:0; line-height:1; }
-    .ark-section-rule { height:2px; background:rgba(13,96,121,0.25); width:100%; margin-top:8px; margin-bottom:24px; }
+    .ark-section-rule { height:2px; background:rgba(13,96,121,0.25); width:100%; margin-top:8px; margin-bottom:14px; }
 
-    /* style only widget labels, not internal uploader button labels */
-    [data-testid="stWidgetLabel"] {
-        font-size: 15px !important;
-        font-weight: 700 !important;
+    [data-testid="stFileUploaderLabel"] { padding-top: 4px !important; }
+
+    [data-testid="stFileUploaderDropzone"] {
+        background-color: #ebebeb !important;
+        border: 1px solid #c8c8c8 !important;
+        border-radius: 6px !important;
     }
+    [data-testid="stFileUploaderDropzone"]:hover {
+        background-color: #e2e2e2 !important;
+        border-color: #b0b0b0 !important;
+    }
+
+    /* Text inputs — match grey style */
+    [data-testid="stTextInput"] input {
+        background-color: #e8e8e8 !important;
+        border: 1px solid #c8c8c8 !important;
+        border-radius: 6px !important;
+        color: #111 !important;
+    }
+    [data-testid="stTextInput"] input:focus {
+        background-color: #e0e0e0 !important;
+        border-color: #0D6079 !important;
+        box-shadow: none !important;
+    }
+
+    label { font-size:15px !important; font-weight:700 !important; }
 
     div.stButton > button[kind="primary"],
-    div.stButton > button[kind="primary"] * {
-        color: #FFFFFF !important;
-    }
+    div.stButton > button[kind="primary"] * { color:#FFFFFF !important; }
     div.stButton > button[kind="primary"] {
         background-color: var(--ark-orange) !important;
+        color: #FFFFFF !important;
         font-size: 22px !important;
         font-weight: 900 !important;
-        border-radius: 14px !important;
+        border-radius: 12px !important;
         padding: 14px 28px !important;
-        height: 64px !important;
         border: none !important;
         box-shadow: 0 8px 20px rgba(247,148,40,0.25) !important;
         width: 100% !important;
     }
-    div.stButton > button[kind="primary"]:hover,
-    div.stButton > button[kind="primary"]:hover * {
-        background-color: var(--ark-blue) !important;
-        color: #FFFFFF !important;
-    }
+    div.stButton > button[kind="primary"]:hover { background-color:var(--ark-blue) !important; color:#FFFFFF !important; }
 
-    .stat-card {
-        background: white; border-radius: 12px; padding: 18px 16px;
-        text-align: center; box-shadow: 0 3px 10px rgba(0,0,0,0.06); margin-bottom: 8px;
-    }
-    .stat-number { font-size: 36px; font-weight: 900; line-height: 1; margin-bottom: 6px; }
-    .stat-label  { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #555; }
-    .color-blue   { color: #0D6079; }
-    .color-green  { color: #375623; }
-    .color-red    { color: #9C0006; }
-    .color-orange { color: #9C6500; }
-
-    /* Fix duplicate "upload" text caused by Material Icon falling back to literal text */
+    /* ── File uploader: hide the stIconMaterial text node that causes "uploadupload" ── */
     [data-testid="stFileUploaderDropzone"] button [data-testid="stIconMaterial"] {
         display: none !important;
     }
+
+    .stat-card { background:white; border-radius:12px; padding:18px 16px; text-align:center; box-shadow:0 3px 10px rgba(0,0,0,0.06); margin-bottom:8px; }
+    .stat-number { font-size:36px; font-weight:900; line-height:1; margin-bottom:6px; }
+    .stat-label  { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#555; }
+    .color-blue   { color:#0D6079; }
+    .color-green  { color:#375623; }
+    .color-red    { color:#9C0006; }
+    .color-orange { color:#9C6500; }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
+# ---------------- JS: nuke stIconMaterial text nodes from the parent document ----------------
+# The iframe trick: inject a script into the main page via st.markdown with a postMessage bridge
+st.markdown("""
+<script>
+(function fixUploaders() {
+    function hide() {
+        // Walk every stFileUploaderDropzone button and hide stIconMaterial children
+        document.querySelectorAll('[data-testid="stFileUploaderDropzone"] button').forEach(btn => {
+            btn.querySelectorAll('[data-testid="stIconMaterial"]').forEach(el => {
+                el.style.cssText = 'display:none!important;width:0!important;height:0!important;overflow:hidden!important;font-size:0!important;';
+            });
+            // Also nuke bare text nodes that are just "upload"
+            btn.childNodes.forEach(node => {
+                if (node.nodeType === Node.TEXT_NODE && node.textContent.trim().toLowerCase() === 'upload') {
+                    node.textContent = '';
+                }
+            });
+        });
+    }
+    // Run immediately and on every DOM mutation
+    hide();
+    new MutationObserver(hide).observe(document.body, { childList: true, subtree: true });
+})();
+</script>
+""", unsafe_allow_html=True)
+
 # ---------------- Fixed Header ----------------
 logo_path = str(LOGO_PATH)
-logo_b64 = img_to_base64(logo_path) if Path(logo_path).exists() else ""
+logo_b64  = img_to_base64(logo_path) if Path(logo_path).exists() else ""
 
 st.markdown(
     f"""
     <div class="ark-nav">
       <div class="ark-nav-inner">
         <div class="ark-nav-left">
-          <img src="data:image/png;base64,{logo_b64}" style="height:68px; width:auto; display:block;" />
-          <div>
-            <div class="ark-nav-title">M&amp;V Plan Review Tool</div>
-          </div>
+          <img src="data:image/png;base64,{logo_b64}"
+            style="height:68px; width:auto; display:block;" />
+          <div><div class="ark-nav-title">M&amp;V Plan Review Tool</div></div>
         </div>
         <div class="ark-nav-right">
-            <div class="pill">AI Assistant</div>
+          <div class="pill">AI Assistant</div>
         </div>
       </div>
     </div>
@@ -380,47 +468,86 @@ st.markdown(
 # ---------------- Upload Section ----------------
 st.markdown(
     """
-    <div class="ark-section">
-      <div class="ark-section-title">Upload documents</div>
-    </div>
+    <div class="ark-section"><div class="ark-section-title">Upload documents</div></div>
     <div class="ark-section-rule"></div>
     """,
     unsafe_allow_html=True,
 )
 
 col1, col2 = st.columns(2)
-
 with col1:
     main_pdf_upload = st.file_uploader(
-        "Main document to be reviewed",
+        "M&V plan",
         type=["pdf"],
         accept_multiple_files=False,
         help="This is the document that will be reviewed.",
     )
-
 with col2:
     supporting_uploads = st.file_uploader(
         "Supporting documents",
         type=["pdf"],
         accept_multiple_files=True,
-        help="Upload any supporting PDFs (standards, scope, annexes, etc.).",
+        help="Upload supporting IGA document",
     )
+
+# Also inject via component to reach inside Streamlit's shadow-dom-like iframes
+components.html("""
+<script>
+(function fixUploadersFromComponent() {
+    function hide(root) {
+        root.querySelectorAll('[data-testid="stIconMaterial"]').forEach(el => {
+            el.style.cssText = 'display:none!important;width:0!important;overflow:hidden!important;font-size:0!important;';
+        });
+        root.querySelectorAll('[data-testid="stFileUploaderDropzone"] button').forEach(btn => {
+            btn.childNodes.forEach(node => {
+                if (node.nodeType === 3 && node.textContent.trim().toLowerCase() === 'upload') {
+                    node.textContent = '';
+                }
+            });
+        });
+    }
+    function run() {
+        // Target parent window
+        try { hide(window.parent.document.body); } catch(e) {}
+        try { hide(window.top.document.body); } catch(e) {}
+    }
+    run();
+    try {
+        new MutationObserver(run).observe(window.parent.document.body, { childList:true, subtree:true });
+    } catch(e) {}
+})();
+</script>
+""", height=0)
+
+# ---------------- Auto-extract metadata from uploaded M&V Plan ----------------
+if main_pdf_upload is not None:
+    file_key = f"{main_pdf_upload.name}_{main_pdf_upload.size}"
+    if st.session_state.get("_meta_file_key") != file_key:
+        with st.spinner("Extracting submission details from document…"):
+            pdf_data = main_pdf_upload.read()
+            main_pdf_upload.seek(0)          # rewind so it can be read again later
+            meta = _extract_submission_metadata(pdf_data)
+        st.session_state["_meta_file_key"]    = file_key
+        st.session_state["_meta_ref_no"]      = meta.get("ref_no", "")
+        st.session_state["_meta_esp_name"]    = meta.get("esp_name", "")
+        st.session_state["_meta_facility"]    = meta.get("facility_name", "")
+else:
+    # Clear cached metadata when file is removed
+    for k in ("_meta_file_key", "_meta_ref_no", "_meta_esp_name", "_meta_facility"):
+        st.session_state.pop(k, None)
 
 # ---------------- Submission details ----------------
 st.markdown(
     """
-    <div class="ark-section">
-      <div class="ark-section-title">Submission details</div>
-    </div>
+    <div class="ark-section"><div class="ark-section-title">Submission details</div></div>
     <div class="ark-section-rule"></div>
     """,
     unsafe_allow_html=True,
 )
 
-ref_no   = st.text_input("Ref. No.", value="")
-esp_name = st.text_input("ESP's Name", value="")
-
-debug_chunks = False
+ref_no        = st.text_input("Ref. No.",      value=st.session_state.get("_meta_ref_no", ""))
+esp_name      = st.text_input("ESP's Name",    value=st.session_state.get("_meta_esp_name", ""))
+facility_name = st.text_input("Facility Name", value=st.session_state.get("_meta_facility", ""))
 
 # ---------------- Generate button ----------------
 btn_left, btn_right = st.columns([7, 3])
@@ -442,14 +569,11 @@ if run_btn:
     logger  = StreamlitLogger(log_box)
 
     try:
-        mv_bytes = main_pdf_upload.read()
+        mv_bytes         = main_pdf_upload.read()
         supporting_bytes = [f.read() for f in (supporting_uploads or [])]
+        main_name        = main_pdf_upload.name
 
-        main_name = main_pdf_upload.name
         logger.log(f"📄 Reviewing: {main_name} with {len(supporting_bytes)} supporting document(s).")
-
-        if debug_chunks:
-            logger.log("🐛 Debug chunks ON")
 
         with st.spinner(f"Generating comments for {main_name}…"):
             result = run_mv_review(
@@ -458,44 +582,25 @@ if run_btn:
                 ref_no,
                 esp_name,
                 main_name,
-                debug_chunks=debug_chunks,
+                facility_name=facility_name,
             )
 
         logger.log(f"✅ Done. {result['total']} questions reviewed.")
 
         st.markdown(
             """
-            <div class="ark-section">
-            <div class="ark-section-title">Results</div>
-            </div>
+            <div class="ark-section"><div class="ark-section-title">Results</div></div>
             <div class="ark-section-rule"></div>
             """,
             unsafe_allow_html=True,
         )
-
         st.success("Review completed successfully.")
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.markdown(
-            f'<div class="stat-card"><div class="stat-number color-blue">{result["total"]}</div>'
-            f'<div class="stat-label">Questions Reviewed</div></div>',
-            unsafe_allow_html=True,
-        )
-        c2.markdown(
-            f'<div class="stat-card"><div class="stat-number color-green">{result["approved"]}</div>'
-            f'<div class="stat-label">Approved</div></div>',
-            unsafe_allow_html=True,
-        )
-        c3.markdown(
-            f'<div class="stat-card"><div class="stat-number color-red">{result["not_approved"]}</div>'
-            f'<div class="stat-label">Not Approved</div></div>',
-            unsafe_allow_html=True,
-        )
-        c4.markdown(
-            f'<div class="stat-card"><div class="stat-number color-orange">{result["incomplete"]}</div>'
-            f'<div class="stat-label">Incomplete</div></div>',
-            unsafe_allow_html=True,
-        )
+        c1.markdown(f'<div class="stat-card"><div class="stat-number color-blue">{result["total"]}</div><div class="stat-label">Questions Reviewed</div></div>', unsafe_allow_html=True)
+        c2.markdown(f'<div class="stat-card"><div class="stat-number color-green">{result["approved"]}</div><div class="stat-label">Approved</div></div>', unsafe_allow_html=True)
+        c3.markdown(f'<div class="stat-card"><div class="stat-number color-red">{result["not_approved"]}</div><div class="stat-label">Not Approved</div></div>', unsafe_allow_html=True)
+        c4.markdown(f'<div class="stat-card"><div class="stat-number color-orange">{result["incomplete"]}</div><div class="stat-label">Incomplete</div></div>', unsafe_allow_html=True)
 
         if result["missing_sns"]:
             st.warning(

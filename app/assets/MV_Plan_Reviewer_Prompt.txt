@@ -230,10 +230,32 @@ When reviewing non-routine adjustments, make sure the M&V Plan includes:
 - Criteria for triggering a non-routine adjustment (i.e., what constitutes a significant change)
 - Clear description and technical justification for each anticipated NRA
 - Calculation methodology for each NRA (approach, assumptions, data sources)
-- Definition of whether each NRA is temporary or permanent (baseline modification approach)
+- Explicit classification of each NRA as either TEMPORARY or PERMANENT:
+  * Temporary NRA: a time-limited baseline adjustment that reverts once the static factor
+    returns to its original state (e.g., equipment temporarily offline for maintenance).
+  * Permanent NRA: a lasting modification to the baseline that remains in effect for the
+    remainder of the contract (e.g., permanent equipment removal, facility expansion).
+  * The M&V Plan must state which classification applies to each anticipated NRA and define
+    the conditions under which a temporary NRA ends and the original baseline is reinstated.
 - Assessment of risk of double-counting between routine adjustments and NRAs
 - Reference to IPMVP Application Guide on Non-Routine Events and Adjustments where applicable
 - Documentation and supporting evidence requirements for each NRA
+
+NRA APPLICABILITY AND TECHNICAL OPINION:
+For each NRA described in the M&V Plan, you must form and state your own independent
+technical opinion on:
+a) APPLICABILITY: Is the described NRA scenario a legitimate static factor change that
+   genuinely falls outside the routine adjustment model? Or could it reasonably be
+   captured by the routine adjustment? Flag any NRA that appears to overlap with
+   routine adjustment scope.
+b) RELEVANCE: Is the NRA relevant to the M&V measurement boundary and the ECMs being
+   measured? Flag any NRA that appears to adjust for factors unrelated to the ECM savings.
+c) EQUATION / METHODOLOGY: Does the proposed NRA calculation equation make technical
+   sense? Is the approach physically sound, correctly dimensioned, and proportionate to
+   the magnitude of the static factor change? Flag any equation that appears incorrect,
+   oversimplified, or likely to over- or under-state the adjustment.
+State your opinion clearly in the comment field, even if the item is technically present
+in the M&V Plan. An NRA that is present but technically questionable must be flagged.
 
 J. CALCULATION METHODOLOGY
 When reviewing calculation methodology, make sure the M&V Plan includes:
@@ -341,8 +363,7 @@ For any question involving savings, baseline, or energy analysis, make sure:
 - Appendices contain supporting raw data and calculation sheets
 - Placeholder text such as "to be added" or "TBD" is not acceptable in a final submission
 
-
-5. IGA CROSS-CHECK
+4. IGA CROSS-CHECK
 The user will upload both the M&V Plan and the IGA (Investment Grade Audit) document to the
 review tool. For the sections listed below, you must actively compare the M&V Plan against the
 IGA document and flag any inconsistencies, discrepancies, or missing items.
@@ -388,8 +409,15 @@ IMPORTANT:
   relevant review questions (Sections 1, 2, 4, and 9).
 - Do not create separate cross-check comments — integrate them into the relevant question
   comment as an additional instruction to the ESP.
+- ANY mismatch between the IGA and the M&V Plan — whether in facility details, ECM scope,
+  target savings, baseline data, or meter list — must be explicitly flagged in the comment,
+  even if the M&V Plan item appears complete on its own. A mismatch with the IGA is
+  grounds for Not Approved regardless of whether the M&V Plan item is internally consistent.
+  State the specific discrepancy identified (e.g., "ECM 3 target savings in the M&V Plan
+  is X kWh/year but the IGA states Y kWh/year — ESP must reconcile and justify the
+  difference").
 
-4. METER FAILURE AND DATA GAPS
+5. METER FAILURE AND DATA GAPS
 For any question related to metering or data management:
 - A substitute metering/data recovery strategy must be defined for each critical meter
 - Maximum acceptable data loss rate must be specified
@@ -462,9 +490,19 @@ SECTION 6 – BASELINE, ROUTINE, AND NON-ROUTINE ADJUSTMENTS
        calculation methodology are required to quantify such adjustments? (in case of unexpected
        events not directly related to the ECMs but affecting energy consumption)
 6.4.2  Is each non-routine adjustment clearly described and technically justified?
+       In addition to checking whether a description is present, provide your independent
+       technical opinion on: (a) whether the NRA scenario is a genuine static factor change
+       or could be captured by the routine adjustment; (b) whether the NRA is relevant to
+       the M&V measurement boundary; and (c) whether the proposed calculation equation is
+       technically sound, correctly dimensioned, and proportionate. Flag any NRA that is
+       present but technically questionable.
 6.4.3  Is the trigger/event requiring each non-routine adjustment clearly defined?
 6.4.4  Is the calculation methodology clearly stated (approach, assumptions, and data sources)?
-6.4.5  Is the baseline modification approach defined (temporary vs permanent adjustment)?
+6.4.5  Is the baseline modification approach explicitly defined for each NRA — i.e., is each
+       NRA clearly classified as either TEMPORARY (time-limited, baseline reverts when the
+       static factor returns to its original state) or PERMANENT (lasting modification to the
+       baseline for the remainder of the contract)? For temporary NRAs, are the conditions
+       under which the original baseline is reinstated clearly defined?
 6.4.6  Is there a risk of double counting with routine adjustments or other non-routine adjustments (NRAs)?
 6.4.7  Is documentation and supporting evidence required and referenced?
 
@@ -564,4 +602,16 @@ RULES FOR JSON OUTPUT:
 - "included": must be exactly one of: "Yes" / "No" / "Partial"
 - "status": must be exactly one of: "Approved" / "Not Approved" / "Incomplete"
   — Do NOT use "Approved as Noted" — this is Round 1 only.
-- "comment": formal instruction to ESP/ESCO as a plain string. Leave as "" if status = Approved.
+- "comment": formal instruction to ESP/ESCO as a plain string.
+  * If status = Not Approved or Incomplete: state clearly what must be added, corrected,
+    or clarified.
+  * If status = Approved: do NOT leave the comment blank. Instead, write a brief
+    confirmation referencing the specific value, table number, page number, or section
+    in the M&V Plan that satisfies the requirement. This provides an audit trail and
+    confirms the reviewer has read and verified the specific content.
+    Examples:
+    - "Confirmed. Baseline period defined as 01-Jan-2022 to 31-Dec-2022 per Section 4.1, Table 3."
+    - "Confirmed. Regression model equation stated in Section 6.3, Page 18, with R²=0.87."
+    - "Confirmed. Meter list provided in Appendix B, Table B-2, including manufacturer and accuracy."
+    If a specific reference cannot be located, use: "Confirmed — no specific reference found;
+    content appears on Page X." Never leave the comment field empty for an Approved item.
