@@ -23,6 +23,8 @@ Colour coding:
 """
 
 import io
+from datetime import date
+
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
@@ -83,7 +85,7 @@ def _is_section_header(value) -> bool:
         f = float(s)
         return f == int(f) and "." not in s
     except (ValueError, TypeError):
-        return True
+        return False  # unparseable as float → multi-part SN like "6.3.1", treat as question row
 
 
 def write_review(template_bytes: bytes, review_by_sn: dict) -> bytes:
@@ -102,8 +104,52 @@ def write_review(template_bytes: bytes, review_by_sn: dict) -> bytes:
     bytes
         In-memory bytes of the filled workbook (xlsx).
     """
-    wb = openpyxl.load_workbook(io.BytesIO(template_bytes))
+    wb = openpyxl.load_workbook(io.BytesIO(template_bytes), keep_links=False)
+
+    # Drop external links, broken named ranges, and legacy drawings that
+    # openpyxl cannot round-trip cleanly.
+    wb._external_links.clear()
+
+    # Remove named ranges that reference external workbooks (contain "[")
+    # — they become invalid once external links are cleared.
+    broken = [
+        name for name in wb.defined_names
+        if "[" in (wb.defined_names[name].attr_text or "")
+    ]
+    for name in broken:
+        del wb.defined_names[name]
+
+    for sheet in wb.worksheets:
+        sheet._charts.clear()
+        sheet._images.clear()
+        if hasattr(sheet, "_drawing") and sheet._drawing is not None:
+            sheet._drawing = None
+
     ws = wb["1. M&V plan_V2.0"]
+
+    # ── Fill review date fields ───────────────────────────────────────────────
+    today_str = date.today().strftime("%d/%m/%y")
+
+    # "Last Updated: dd/mm/yy" — find the cell in row 5 that contains the text
+    for cell in ws[5]:
+        if cell.value and "Last Updated" in str(cell.value):
+            cell.value = f"Last Updated: {today_str}"
+            break
+
+    # Round 1 row (row 15): Issued On (col C=3), Received on (col D=4), Reviewed on (col E=5)
+    for col in (3, 4, 5):
+        cell = ws.cell(row=15, column=col)
+        cell.value = today_str
+
+    # Round 1 Assessment (col F=6): Approved only if every question is Approved
+    all_approved = all(item.get("status") == "Approved" for item in review_by_sn.values())
+    assessment = "Approved" if all_approved else "Not Approved"
+    assess_s = STATUS_STYLES[assessment]
+    _style_cell(
+        ws.cell(row=15, column=6),
+        assessment, bg=assess_s["bg"], fc=assess_s["fc"],
+        bold=True, align="center"
+    )
 
     for row_idx in range(DATA_START, ws.max_row + 1):
         sn_val = ws.cell(row=row_idx, column=COL_SN).value
