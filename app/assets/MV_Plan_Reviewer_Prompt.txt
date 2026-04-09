@@ -480,10 +480,9 @@ SECTION 6 – BASELINE, ROUTINE, AND NON-ROUTINE ADJUSTMENTS
 6.3.3  Are all routine adjustments explicitly identified and distinct from non-routine adjustments?
 6.3.4  Is the adjustment method/formula stated and unambiguous (including units and sign conventions)?
 6.3.5  Is uncertainty/accuracy addressed for routine adjustments?
-6.3.6  In case of regression modelling, is the regression equation based on baseline data correct,
-       and is it statistically significant based on IPMVP and ASHRAE Guideline 14 requirements?
-       (R² > 0.75; absolute t-statistic > 2 for all variables; CV(RMSE) ≤ 20% monthly / ≤ 10% daily;
-       NMBE ≤ ±5% monthly / ≤ ±1% daily; expected savings > twice the standard error of the model)
+6.3.6  In case of regression modelling, is the regression equation based on baseline data correct and statistically significant per IPMVP and ASHRAE Guideline 14? Verify each reported statistic against its required threshold numerically: R² > 0.75; absolute t-statistic > 2 for all variables; CV(RMSE) ≤ 20% monthly / ≤ 10% daily; NMBE ≤ ±5% monthly / ≤ ±1% daily; expected savings > twice the standard error of the model. For each statistic, state the ESP-reported value and whether it passes or fails. Additionally: (a) assess whether the regression coefficients are physically plausible — correct sign, reasonable magnitude, and consistent units; (b) perform an independent regression at 95% confidence using the baseline data and confirm whether your result is consistent with the ESP's reported equation and statistics. If the baseline data is insufficient to perform independent verification, flag this and instruct the ESP to provide full baseline data and regression workings.
+ 
+ 
 
 6.4  NON-ROUTINE ADJUSTMENTS
 6.4.1  Are non-routine adjustments clearly identified and described, including what data plus

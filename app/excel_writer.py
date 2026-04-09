@@ -11,15 +11,15 @@ Columns written (1-based):
   J  col 10 = Consultant's Comments Round 1
 
 Colour coding:
-  Yes  / Approved     -> bg #C6EFCE  font #375623  bold  centered
-  No   / Not Approved -> bg #FFC7CE  font #9C0006  bold  centered
-  Partial / Incomplete-> bg #FFEB9C  font #9C6500  bold  centered
+  Yes  / Approved     -> bg #00B050  font #FFFFFF  bold  centered
+  No   / Not Approved -> bg #FF0000  font #FFFFFF  bold  centered
+  Partial / Incomplete-> bg #FFFF00  font #000000  bold  centered
 
   Comment non-empty   -> bg #FFFF99  font #000000  wrap  top-aligned
   Comment empty       -> bg #FFFFFF
   Row height          -> max(40, (len//80 + newlines + 1) * 15)
 
-  All written cells: Arial 10, thin border #BBBBBB.
+  All written cells: Trebuchet MS 10, thin border #BBBBBB.
 """
 
 import io
@@ -35,21 +35,21 @@ COL_STATUS  = 9   # I  Active Status
 COL_COMMENT = 10  # J  Consultant's Comments Round 1
 DATA_START  = 22  # First data row
 
-FONT_NAME = "Arial"
+FONT_NAME = "Trebuchet MS"
 FONT_SIZE = 10
 BORDER_COLOR = "BBBBBB"
 
 # ── Style maps ───────────────────────────────────────────────────────────────
 INCLUDED_STYLES = {
-    "Yes":     {"bg": "C6EFCE", "fc": "375623"},
-    "No":      {"bg": "FFC7CE", "fc": "9C0006"},
-    "Partial": {"bg": "FFEB9C", "fc": "9C6500"},
+    "Yes":     {"bg": "E2EFDA", "fc": "00B050"},
+    "No":      {"bg": "FFD3D3", "fc": "C00000"},
+    "Partial": {"bg": "FFF2CC", "fc": "C65911"},
 }
 
 STATUS_STYLES = {
-    "Approved":     {"bg": "C6EFCE", "fc": "375623"},
-    "Not Approved": {"bg": "FFC7CE", "fc": "9C0006"},
-    "Incomplete":   {"bg": "FFEB9C", "fc": "9C6500"},
+    "Approved":     {"bg": "00B050", "fc": "FFFFFF"},
+    "Not Approved": {"bg": "FF0000", "fc": "FFFFFF"},
+    "Incomplete":   {"bg": "FFFF00", "fc": "000000"},
 }
 
 COMMENT_BG = "FFFF99"
@@ -71,7 +71,8 @@ def _style_cell(cell, value: str, bg: str, fc: str,
     cell.value = value
     cell.font = Font(name=FONT_NAME, size=FONT_SIZE, color=fc, bold=bold)
     cell.fill = _make_fill(bg)
-    cell.alignment = Alignment(horizontal=align, vertical="top", wrap_text=wrap)
+    vertical = "center" if align == "center" else "top"
+    cell.alignment = Alignment(horizontal=align, vertical=vertical, wrap_text=wrap)
     cell.border = _make_border()
 
 
@@ -151,9 +152,9 @@ def write_review(template_bytes: bytes, review_by_sn: dict,
         cp = wb["Cover Page"]
         # Date (row 12, col B)
         cp.cell(row=12, column=2).value = today_str
-        # ESP name (row 13, col B)
+        # ESP name (row 13, col C)
         if esp_name:
-            cp.cell(row=13, column=2).value = esp_name
+            cp.cell(row=13, column=3).value = esp_name
         # Date of Last Status (row 16, col F)
         cp.cell(row=16, column=6).value = today_str
 
