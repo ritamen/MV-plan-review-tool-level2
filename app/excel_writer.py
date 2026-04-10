@@ -90,7 +90,7 @@ def _is_section_header(value) -> bool:
 
 
 def write_review(template_bytes: bytes, review_by_sn: dict,
-                 ref_no: str = "", esp_name: str = "", facility_name: str = "") -> bytes:
+                 ref_no: str = "", client_name: str = "", esp_name: str = "", facility_name: str = "") -> bytes:
     """
     Load the Excel template from bytes, write review results, return as bytes.
 
@@ -150,11 +150,14 @@ def write_review(template_bytes: bytes, review_by_sn: dict,
     # ── Cover Page ────────────────────────────────────────────────────────────
     if "Cover Page" in wb.sheetnames:
         cp = wb["Cover Page"]
+        # Client name (row 10, col A)
+        if client_name:
+            cp.cell(row=10, column=1).value = client_name
         # Date (row 12, col B)
         cp.cell(row=12, column=2).value = today_str
-        # ESP name (row 13, col C)
+        # ESP name (row 13, col B)
         if esp_name:
-            cp.cell(row=13, column=3).value = esp_name
+            cp.cell(row=13, column=2).value = esp_name
         # Date of Last Status (row 16, col F)
         cp.cell(row=16, column=6).value = today_str
 

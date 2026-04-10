@@ -189,7 +189,7 @@ def _call_claude_retry(client, user_content: list, first_raw: str) -> str:
     )
     return _extract_json_text(response)
 
-def run_mv_review(mv_bytes, supporting_bytes, ref_no, esp_name, mv_filename, facility_name="", debug_chunks=False):
+def run_mv_review(mv_bytes, supporting_bytes, ref_no, client_name, esp_name, mv_filename, facility_name="", debug_chunks=False):
     import anthropic
 
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -230,8 +230,8 @@ def run_mv_review(mv_bytes, supporting_bytes, ref_no, esp_name, mv_filename, fac
     total        = len(items)
 
     filled_bytes = write_review(TEMPLATE_BYTES, review_by_sn,
-                               ref_no=ref_no, esp_name=esp_name,
-                               facility_name=facility_name)
+                               ref_no=ref_no, client_name=client_name,
+                               esp_name=esp_name, facility_name=facility_name)
 
     base_name = mv_filename.replace(".pdf", "")
     parts = ["MV_Plan_Review"]
@@ -253,9 +253,9 @@ def run_mv_review(mv_bytes, supporting_bytes, ref_no, esp_name, mv_filename, fac
 
 def _extract_submission_metadata(pdf_bytes: bytes) -> dict:
     """
-    Extract Ref. No., ESP name, and Facility Name from the first pages of the
-    M&V Plan PDF using a fast Claude call.  Returns a dict with keys
-    ref_no, esp_name, facility_name (empty strings if not found).
+    Extract Ref. No., client name, ESP name, and Facility Name from the first
+    pages of the M&V Plan PDF using a fast Claude call.  Returns a dict with
+    keys ref_no, client_name, esp_name, facility_name (empty strings if not found).
     """
     import anthropic
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -266,16 +266,17 @@ def _extract_submission_metadata(pdf_bytes: bytes) -> dict:
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=300,
+            max_tokens=400,
             messages=[{
                 "role": "user",
                 "content": (
                     "Read the following text extracted from an M&V Plan document "
-                    "and extract exactly three fields.\n"
+                    "and extract exactly four fields.\n"
                     "Return ONLY a JSON object — no markdown, no explanation — with "
                     "these keys:\n"
                     "  ref_no        – the reference / document number\n"
-                    "  esp_name      – the name of the Energy Service Provider (ESP / contractor)\n"
+                    "  client_name   – the name of the client or owner (the organisation that commissioned the work, not the ESP)\n"
+                    "  esp_name      – the name of the Energy Service Provider (ESP / ESCO / contractor)\n"
                     "  facility_name – the name of the facility or project site\n"
                     "Use an empty string for any field you cannot find.\n\n"
                     f"{text}"
@@ -530,11 +531,12 @@ if main_pdf_upload is not None:
             meta = _extract_submission_metadata(pdf_data)
         st.session_state["_meta_file_key"]    = file_key
         st.session_state["_meta_ref_no"]      = meta.get("ref_no", "")
+        st.session_state["_meta_client_name"] = meta.get("client_name", "")
         st.session_state["_meta_esp_name"]    = meta.get("esp_name", "")
         st.session_state["_meta_facility"]    = meta.get("facility_name", "")
 else:
     # Clear cached metadata when file is removed
-    for k in ("_meta_file_key", "_meta_ref_no", "_meta_esp_name", "_meta_facility"):
+    for k in ("_meta_file_key", "_meta_ref_no", "_meta_client_name", "_meta_esp_name", "_meta_facility"):
         st.session_state.pop(k, None)
 
 # ---------------- Submission details ----------------
@@ -546,7 +548,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-ref_no        = st.text_input("Ref. No.",      value=st.session_state.get("_meta_ref_no", ""))
+ref_no        = st.text_input("Ref. No.",       value=st.session_state.get("_meta_ref_no", ""))
+client_name   = st.text_input("Client Name",   value=st.session_state.get("_meta_client_name", ""))
 esp_name      = st.text_input("ESP's Name",    value=st.session_state.get("_meta_esp_name", ""))
 facility_name = st.text_input("Facility Name", value=st.session_state.get("_meta_facility", ""))
 
@@ -581,6 +584,7 @@ if run_btn:
                 mv_bytes,
                 supporting_bytes,
                 ref_no,
+                client_name,
                 esp_name,
                 main_name,
                 facility_name=facility_name,
