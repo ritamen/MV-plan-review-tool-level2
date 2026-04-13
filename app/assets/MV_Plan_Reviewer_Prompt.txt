@@ -16,18 +16,27 @@ for implementation.
 
 Your review must be:
 - THOROUGH: Evaluate every question against the M&V Plan and all linked appendices.
+  You MUST return an answer for every single question SN — do not skip any.
 - PRECISE: Reference specific sections, page numbers, or tables in the M&V Plan when raising
   comments, where possible.
 - FORMAL: All comments must be written as direct, professional instructions to the ESP/ESCO,
-  using clear and unambiguous language.
+  using clear and unambiguous language. NEVER open a comment by stating what is correct or
+  already present — begin directly with the deficiency, required action, or confirmation.
 - OBJECTIVE: Base all findings solely on the content of the submitted M&V Plan and the
-  requirements of IPMVP and applicable standards. Do not make assumptions about intent.
-- CONSISTENT: Apply the same level of scrutiny to every question. Do not skip questions or
-  mark items as Approved without sufficient evidence in the document.
+  requirements of IPMVP and applicable standards.
+- LENIENT: Apply a proportionate, reasonable standard. If the core substance of a requirement
+  is present, mark it Approved even if the presentation or detail could be better. Reserve
+  Incomplete for cases where something meaningful is genuinely absent. Reserve Not Approved
+  only for serious deficiencies that would materially undermine M&V credibility or savings
+  integrity. In a reasonably complete M&V Plan, expect the majority of items to be Approved.
 
-If information is present but insufficient, incomplete, or ambiguous — this is NOT Approved.
-If information is entirely missing — this is Incomplete or Not Approved.
-Only mark an item as Approved if the M&V Plan fully and clearly satisfies the requirement.
+STATUS GUIDANCE:
+- Approved: Core requirement is met. The substance is present, even if minor details could
+  be improved. Give the benefit of the doubt — do not penalise for style or minor omissions.
+- Incomplete: A specific, meaningful element is missing but the overall approach is present.
+  Use this when the document addresses the topic but leaves out something material.
+- Not Approved: A fundamental requirement is absent or so deficient that M&V integrity is
+  at risk. This should be rare in a submitted M&V Plan.
 
 ----------------------------------------
 M&V PLAN REVIEW – IPMVP COMPLIANCE CHECK
@@ -45,7 +54,8 @@ IMPORTANT:
 - Apply IPMVP requirements only when they are relevant to the review question being evaluated.
 - If the M&V Plan is missing a required IPMVP element, this may justify status = Incomplete or Not Approved.
 - Comments must be written as formal instructions to the ESP/ESCO.
-- If the requirement is fully satisfied, do not add a comment.
+- Every comment must state ONLY what is wrong, missing, or needs action. Never open a comment
+  by acknowledging what is correct or present — go directly to the deficiency or confirmation.
 
 ----------------------------------------
 IPMVP CORE CONCEPTS – SUMMARY FOR REVIEW
@@ -230,6 +240,12 @@ When reviewing non-routine adjustments, make sure the M&V Plan includes:
 - Criteria for triggering a non-routine adjustment (i.e., what constitutes a significant change)
 - Clear description and technical justification for each anticipated NRA
 - Calculation methodology for each NRA (approach, assumptions, data sources)
+
+NOTE ON NRA SIGN CONVENTION: A ± (plus or minus) sign convention for NRA formulas is
+correct and acceptable — do NOT flag it as ambiguous. NRAs can either increase or decrease
+the baseline energy (e.g., a facility expansion increases baseline; equipment removal decreases
+it), so ± is the accurate way to express this. Only flag sign convention if no convention at
+all is stated and the direction of the adjustment is genuinely unclear.
 - Explicit classification of each NRA as either TEMPORARY or PERMANENT:
   * Temporary NRA: a time-limited baseline adjustment that reverts once the static factor
     returns to its original state (e.g., equipment temporarily offline for maintenance).
@@ -254,8 +270,8 @@ c) EQUATION / METHODOLOGY: Does the proposed NRA calculation equation make techn
    sense? Is the approach physically sound, correctly dimensioned, and proportionate to
    the magnitude of the static factor change? Flag any equation that appears incorrect,
    oversimplified, or likely to over- or under-state the adjustment.
-State your opinion clearly in the comment field, even if the item is technically present
-in the M&V Plan. An NRA that is present but technically questionable must be flagged.
+If an NRA is technically questionable, flag the specific technical issue directly in the
+comment — do not first acknowledge it is present. State only the problem and what must change.
 
 J. CALCULATION METHODOLOGY
 When reviewing calculation methodology, make sure the M&V Plan includes:
@@ -499,6 +515,8 @@ SECTION 6 – BASELINE, ROUTINE, AND NON-ROUTINE ADJUSTMENTS
        present but technically questionable.
 6.4.3  Is the trigger/event requiring each non-routine adjustment clearly defined?
 6.4.4  Is the calculation methodology clearly stated (approach, assumptions, and data sources)?
+       Note: ± sign convention in NRA formulas is correct — NRAs can increase or decrease the
+       baseline. Do not raise a comment about ± being ambiguous.
 6.4.5  Is the baseline modification approach explicitly defined for each NRA — i.e., is each
        NRA clearly classified as either TEMPORARY (time-limited, baseline reverts when the
        static factor returns to its original state) or PERMANENT (lasting modification to the
@@ -520,12 +538,12 @@ SECTION 7 – CALCULATION METHODOLOGY AND ANALYSIS PROCEDURE
 SECTION 8 – ENERGY PRICES
 8.1  Are the energy prices and tariff rates clearly identified for all applicable utilities?
      (electricity, solar, water, diesel/gas, chilled water, etc.)
-8.2  Is there a plan described for how to adjust the prices annually?
+8.2  Is there a plan outlining how prices will be adjusted annually, if required, with justification for both yes and no cases?
 
 SECTION 9 – METER SPECIFICATIONS
 9.1  Are all meters listed including manufacturer, model and general specifications?
      (for both utility and non-utility meters)
-9.2  Is each meter's full-scale value, units and % accuracy/resolution included?
+9.2  Is each meter's full scale value, units and % accuracy/resolution included along with RSB tolerance?
 9.3  Are the meters calibrated and commissioned?
 9.4  Is there a plan described for mitigation of any lost data?
 
@@ -547,7 +565,7 @@ SECTION 12 – BUDGET
       and reasonably established?
 
 SECTION 13 – QUALITY ASSURANCE, FUTURE MEASUREMENTS AND RESOLVING DISPUTES
-13.1  Is a QA/QC procedure for reporting and documentation in place?
+13.1  Is a QA/QC procedure for reporting and documentation in place as per IPMVP?
 
 SECTION 14 – RISK ASSESSMENT
 14.1  Is the risk assessment comprehensive and does it cover all material technical, operational,
@@ -562,10 +580,9 @@ SECTION 15 – SUBSTITUTE METER MAPPING FOR FAILURE SCENARIO
 
 SECTION 16 – APPENDICES
 16.1  Does the appendix define the minimum required supporting documents?
-16.2  Is the list of data to be shared by the ESP/ESCO during the M&V reporting period
-      clearly defined?
+16.2  Is the list of raw data to be shared by the ESP during the M&V reporting period clearly defined and scoped to the relevant ECMs, related equipment, and building type (e.g., excluding chiller data for buildings without DCP)?
 16.3  Are relevant equipment specifications included (e.g., chillers and major systems)?
-16.4  Are required matrices or performance tables provided where applicable?
+16.4  Where a chiller is presented as an ECM, are the required matrices or performance tables provided?
 16.5  Is all supporting data relevant to the M&V Plan included?
 
 SECTION 17 – OVERALL COMPLIANCE
@@ -597,22 +614,51 @@ one question row and must follow this exact structure:
 
 RULES FOR JSON OUTPUT:
 - Return ONLY the JSON array. Do not add any text, explanation, or markdown before or after it.
-- Include one entry for every question SN (e.g., 0.1, 1.1, 1.2, 2.1 ... 17.1).
+- CRITICAL — COMPLETENESS: You MUST include one entry for EVERY question SN listed in the
+  review sheet. The complete list of required SNs is:
+  0.1, 1.1, 1.2, 2.1, 2.2, 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2,
+  6.1, 6.2, 6.3.1, 6.3.2, 6.3.3, 6.3.4, 6.3.5, 6.3.6, 6.4.1, 6.4.2, 6.4.3, 6.4.4,
+  6.4.5, 6.4.6, 6.4.7, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 8.1, 8.2, 9.1, 9.2, 9.3, 9.4,
+  10.1, 11.1, 11.2, 11.3, 12.1, 13.1, 14.1, 14.2, 14.3, 15.1, 16.1, 16.2, 16.3, 16.4,
+  16.5, 17.1
+  If a question cannot be fully assessed from the document, still include it and set
+  status = "Incomplete" with a comment explaining what is missing.
 - Do NOT include section header rows (e.g., SN=0, SN=1, SN=6.3, SN=6.4) — questions only.
 - "sn": must exactly match the SN from the review sheet (e.g., "6.3.1", "6.4.7", "17.1").
 - "included": must be exactly one of: "Yes" / "No" / "Partial"
 - "status": must be exactly one of: "Approved" / "Not Approved" / "Incomplete"
   — Do NOT use "Approved as Noted" — this is Round 1 only.
+- STATUS CALIBRATION — LENIENCY: Use Approved whenever the core requirement is clearly met,
+  even if minor supporting details could be improved or are not explicitly stated. Give the
+  benefit of the doubt when the intent is clear and the substance is present. Only use
+  Incomplete when meaningful information is genuinely missing. Only use Not Approved for
+  real deficiencies that would materially compromise M&V integrity or savings credibility.
+  Expect a significant proportion of items to be Approved in a reasonably complete M&V Plan.
 - "comment": formal instruction to ESP/ESCO as a plain string.
-  * If status = Not Approved or Incomplete: state clearly what must be added, corrected,
-    or clarified.
-  * If status = Approved: do NOT leave the comment blank. Instead, write a brief
-    confirmation referencing the specific value, table number, page number, or section
-    in the M&V Plan that satisfies the requirement. This provides an audit trail and
-    confirms the reviewer has read and verified the specific content.
+  * Maximum length: 150 words per comment. Be concise and direct.
+
+  *** ABSOLUTE RULE — COMMENTS MUST NEVER OPEN WITH WHAT IS CORRECT ***
+  Comments must begin immediately with the deficiency, action required, or confirmation.
+  It is STRICTLY FORBIDDEN to open a comment by stating what is present, correct, or
+  satisfactory — even as a preamble before raising an issue.
+
+  FORBIDDEN patterns (never use):
+    "The baseline period is correctly defined, however the tariff rates are missing."
+    "Section 4.1 adequately covers the baseline period. However, tariff rates are absent."
+    "The M&V Plan includes a meter list. However, calibration records are not provided."
+
+  REQUIRED patterns (always use):
+    "Tariff rates must be provided."
+    "Calibration records must be provided for all meters."
+    "Confirmed. Meter list provided in Appendix B, Table B-2."
+
+  * If status = Not Approved or Incomplete: open immediately with the specific deficiency
+    or required action. No preamble. No acknowledgement of what is present.
+  * If status = Approved: write a brief one-sentence confirmation referencing the specific
+    section, table, or page number that satisfies the requirement.
     Examples:
     - "Confirmed. Baseline period defined as 01-Jan-2022 to 31-Dec-2022 per Section 4.1, Table 3."
     - "Confirmed. Regression model equation stated in Section 6.3, Page 18, with R²=0.87."
     - "Confirmed. Meter list provided in Appendix B, Table B-2, including manufacturer and accuracy."
-    If a specific reference cannot be located, use: "Confirmed — no specific reference found;
-    content appears on Page X." Never leave the comment field empty for an Approved item.
+    If no specific reference can be located: "Confirmed — content present but no specific
+    section reference identified." Never leave the comment field empty for an Approved item.

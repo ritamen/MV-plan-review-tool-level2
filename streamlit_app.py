@@ -24,6 +24,7 @@ load_dotenv(BASE_DIR.parent / ".env")
 sys.path.insert(0, str(BASE_DIR))
 from excel_writer import write_review
 from sn_extractor import extract_expected_sns
+from regression_verifier import verify_all
 
 # ── Load assets once ──────────────────────────────────────────────────────────
 REVIEWER_PROMPT: str   = PROMPT_PATH.read_text(encoding="utf-8")
@@ -189,7 +190,7 @@ def _call_claude_retry(client, user_content: list, first_raw: str) -> str:
     )
     return _extract_json_text(response)
 
-def run_mv_review(mv_bytes, supporting_bytes, ref_no, esp_name, mv_filename, facility_name="", debug_chunks=False):
+def run_mv_review(mv_bytes, supporting_bytes, ref_no, client_name, esp_name, mv_filename, facility_name="", regression_data=None, regression_data_provided=False, debug_chunks=False):
     import anthropic
 
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -229,9 +230,20 @@ def run_mv_review(mv_bytes, supporting_bytes, ref_no, esp_name, mv_filename, fac
     incomplete   = sum(1 for it in items if it.get("status") == "Incomplete")
     total        = len(items)
 
+    # ── Python regression verification ────────────────────────────────────────
+    regression_results = []
+    if regression_data:
+        try:
+            regression_results = verify_all(regression_data)
+            logging.info("Regression verified for %d EEM(s).", len(regression_results))
+        except Exception as e:
+            logging.warning("Regression verification skipped: %s", e)
+
     filled_bytes = write_review(TEMPLATE_BYTES, review_by_sn,
-                               ref_no=ref_no, esp_name=esp_name,
-                               facility_name=facility_name)
+                               ref_no=ref_no, client_name=client_name,
+                               esp_name=esp_name, facility_name=facility_name,
+                               regression_results=regression_results,
+                               regression_data_provided=regression_data_provided)
 
     base_name = mv_filename.replace(".pdf", "")
     parts = ["MV_Plan_Review"]
@@ -241,21 +253,22 @@ def run_mv_review(mv_bytes, supporting_bytes, ref_no, esp_name, mv_filename, fac
     output_filename = "_".join(parts) + ".xlsx"
 
     return {
-        "total":        total,
-        "approved":     approved,
-        "not_approved": not_approved,
-        "incomplete":   incomplete,
-        "missing_sns":  missing_sns,
-        "excel_bytes":  filled_bytes,
-        "filename":     output_filename,
+        "total":               total,
+        "approved":            approved,
+        "not_approved":        not_approved,
+        "incomplete":          incomplete,
+        "missing_sns":         missing_sns,
+        "excel_bytes":         filled_bytes,
+        "filename":            output_filename,
+        "regression_results":  regression_results,
     }
 
 
 def _extract_submission_metadata(pdf_bytes: bytes) -> dict:
     """
-    Extract Ref. No., ESP name, and Facility Name from the first pages of the
-    M&V Plan PDF using a fast Claude call.  Returns a dict with keys
-    ref_no, esp_name, facility_name (empty strings if not found).
+    Extract Ref. No., client name, ESP name, and Facility Name from the first
+    pages of the M&V Plan PDF using a fast Claude call.  Returns a dict with
+    keys ref_no, client_name, esp_name, facility_name (empty strings if not found).
     """
     import anthropic
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -266,16 +279,17 @@ def _extract_submission_metadata(pdf_bytes: bytes) -> dict:
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=300,
+            max_tokens=400,
             messages=[{
                 "role": "user",
                 "content": (
                     "Read the following text extracted from an M&V Plan document "
-                    "and extract exactly three fields.\n"
+                    "and extract exactly four fields.\n"
                     "Return ONLY a JSON object — no markdown, no explanation — with "
                     "these keys:\n"
                     "  ref_no        – the reference / document number\n"
-                    "  esp_name      – the name of the Energy Service Provider (ESP / contractor)\n"
+                    "  client_name   – the name of the client or owner (the organisation that commissioned the work, not the ESP)\n"
+                    "  esp_name      – the name of the Energy Service Provider (ESP / ESCO / contractor)\n"
                     "  facility_name – the name of the facility or project site\n"
                     "Use an empty string for any field you cannot find.\n\n"
                     f"{text}"
@@ -287,6 +301,176 @@ def _extract_submission_metadata(pdf_bytes: bytes) -> dict:
     except Exception as e:
         logging.warning("Metadata extraction failed: %s", e)
         return {}
+
+
+def _parse_regression_excel(excel_bytes: bytes) -> list:
+    """
+    Parse a real-world M&V regression data Excel file.
+
+    Detection logic (no fixed template required):
+      1. Scans every sheet for contiguous blocks of rows where at least
+         two columns contain numeric data — these are the data sections.
+      2. Within each data block, identifies the kWh column by finding
+         "kwh" in any header/unit row directly above the block.
+         Falls back to the rightmost numeric column if not found.
+      3. The independent variable column is the nearest other numeric column.
+      4. EEM name is found by scanning upward from the data block for any
+         non-empty text cell that doesn't look like a header or unit label.
+         Falls back to the sheet name.
+
+    Returns a list of dicts compatible with verify_all().
+    """
+    import openpyxl
+
+    # Words used as column headers / units — not EEM names
+    _HEADER_WORDS = (
+        "month", "date", "period", "kwh", "trh", "cooling", "heating",
+        "energy", "consumption", "production", "independent", "variable",
+        "baseline", "driving", "cdd", "hdd", "#",
+    )
+
+    wb = openpyxl.load_workbook(io.BytesIO(excel_bytes), data_only=True)
+    eem_data = []
+
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+        rows = [list(row) for row in ws.iter_rows(values_only=True)]
+        n_rows = len(rows)
+        if not rows:
+            continue
+
+        i = 0
+        while i < n_rows:
+            row = rows[i]
+
+            # Count numeric cells in this row
+            num_cols = {}
+            for j, cell in enumerate(row):
+                if cell is not None:
+                    try:
+                        num_cols[j] = float(cell)
+                    except (ValueError, TypeError):
+                        pass
+
+            # Need ≥ 2 numeric columns to consider this the start of a data block
+            if len(num_cols) < 2:
+                i += 1
+                continue
+
+            # Collect the full contiguous data block (stop at blank row)
+            data_start = i
+            col_series = {}   # col_idx → [float, ...]
+
+            j = i
+            while j < n_rows:
+                r = rows[j]
+                if not any(c is not None for c in r):
+                    break
+                row_nums = {}
+                for k, cell in enumerate(r):
+                    if cell is not None:
+                        try:
+                            row_nums[k] = float(cell)
+                        except (ValueError, TypeError):
+                            pass
+                if not row_nums and j > data_start:
+                    break   # non-numeric row after data started
+                for k, v in row_nums.items():
+                    col_series.setdefault(k, []).append(v)
+                j += 1
+
+            data_end = j
+            n_data = data_end - data_start
+
+            if n_data < 3:
+                i = data_end + 1
+                continue
+
+            # Columns present in ≥ 80 % of rows
+            valid_cols = sorted(
+                [c for c, vals in col_series.items() if len(vals) >= n_data * 0.8]
+            )
+
+            if len(valid_cols) < 2:
+                i = data_end + 1
+                continue
+
+            # Find the kWh column by scanning header rows above data_start
+            kwh_col = None
+            for hi in range(data_start - 1, max(data_start - 6, -1), -1):
+                for k, cell in enumerate(rows[hi]):
+                    if cell is not None and "kwh" in str(cell).strip().lower():
+                        if k in valid_cols:
+                            kwh_col = k
+                            break
+                if kwh_col is not None:
+                    break
+
+            if kwh_col is None:
+                kwh_col = max(valid_cols)   # fallback: rightmost numeric column
+
+            # Independent variable = nearest other valid column
+            indep_col = min(
+                [c for c in valid_cols if c != kwh_col],
+                key=lambda c: abs(c - kwh_col),
+                default=None,
+            )
+
+            if indep_col is None:
+                i = data_end + 1
+                continue
+
+            # EEM name: scan upward for the first non-header text cell
+            eem_name = sheet_name
+            for hi in range(data_start - 1, max(data_start - 12, -1), -1):
+                for cell in rows[hi]:
+                    if cell is not None:
+                        val = str(cell).strip()
+                        if len(val) < 2:
+                            continue
+                        try:
+                            float(val)
+                            continue   # skip bare numbers
+                        except ValueError:
+                            pass
+                        if not any(kw in val.lower() for kw in _HEADER_WORDS):
+                            eem_name = val
+                            break
+                if eem_name != sheet_name:
+                    break
+
+            # Extract aligned pairs row-by-row
+            baseline_kwh = []
+            indep_values = []
+            for row in rows[data_start:data_end]:
+                b = row[kwh_col]   if kwh_col   < len(row) else None
+                x = row[indep_col] if indep_col < len(row) else None
+                try:
+                    if b is not None and x is not None:
+                        baseline_kwh.append(float(b))
+                        indep_values.append(float(x))
+                except (ValueError, TypeError):
+                    pass
+
+            if len(baseline_kwh) < 3:
+                logging.warning(
+                    "Sheet '%s': need ≥ 3 data points, got %d — skipped.",
+                    sheet_name, len(baseline_kwh),
+                )
+                i = data_end + 1
+                continue
+
+            eem_data.append({
+                "eem_name":             eem_name,
+                "baseline_kwh":         baseline_kwh,
+                "indep_values":         indep_values,
+                "reported_stats":       None,
+                "expected_savings_kwh": None,
+            })
+
+            i = data_end + 1   # move past this block
+
+    return eem_data
 
 
 class StreamlitLogger:
@@ -475,7 +659,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 with col1:
     main_pdf_upload = st.file_uploader(
         "M&V plan",
@@ -489,6 +673,18 @@ with col2:
         type=["pdf"],
         accept_multiple_files=True,
         help="Upload supporting IGA document",
+    )
+with col3:
+    regression_excel_upload = st.file_uploader(
+        "Regression Data (optional)",
+        type=["xlsx"],
+        accept_multiple_files=False,
+        help=(
+            "FORMAT — one file, one sheet per EEM: if the M&V plan has multiple EEMs "
+            "that each use regression, include one sheet in the Excel file for each EEM. "
+            "Each sheet should contain the monthly baseline kWh values and the "
+            "corresponding independent variable values."
+        ),
     )
 
 # Also inject via component to reach inside Streamlit's shadow-dom-like iframes
@@ -530,11 +726,12 @@ if main_pdf_upload is not None:
             meta = _extract_submission_metadata(pdf_data)
         st.session_state["_meta_file_key"]    = file_key
         st.session_state["_meta_ref_no"]      = meta.get("ref_no", "")
+        st.session_state["_meta_client_name"] = meta.get("client_name", "")
         st.session_state["_meta_esp_name"]    = meta.get("esp_name", "")
         st.session_state["_meta_facility"]    = meta.get("facility_name", "")
 else:
     # Clear cached metadata when file is removed
-    for k in ("_meta_file_key", "_meta_ref_no", "_meta_esp_name", "_meta_facility"):
+    for k in ("_meta_file_key", "_meta_ref_no", "_meta_client_name", "_meta_esp_name", "_meta_facility"):
         st.session_state.pop(k, None)
 
 # ---------------- Submission details ----------------
@@ -546,7 +743,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-ref_no        = st.text_input("Ref. No.",      value=st.session_state.get("_meta_ref_no", ""))
+ref_no        = st.text_input("Ref. No.",       value=st.session_state.get("_meta_ref_no", ""))
+client_name   = st.text_input("Client Name",   value=st.session_state.get("_meta_client_name", ""))
 esp_name      = st.text_input("ESP's Name",    value=st.session_state.get("_meta_esp_name", ""))
 facility_name = st.text_input("Facility Name", value=st.session_state.get("_meta_facility", ""))
 
@@ -574,6 +772,23 @@ if run_btn:
         supporting_bytes = [f.read() for f in (supporting_uploads or [])]
         main_name        = main_pdf_upload.name
 
+        # ── Parse regression Excel (if uploaded) ──────────────────────────────
+        regression_data = None
+        regression_data_provided = regression_excel_upload is not None
+        if regression_excel_upload is not None:
+            try:
+                regression_data = _parse_regression_excel(regression_excel_upload.read())
+                if regression_data:
+                    logger.log(f"📊 Regression data loaded: {len(regression_data)} EEM(s) found in Excel.")
+                else:
+                    st.warning(
+                        "The regression Excel file was uploaded but no valid EEM data "
+                        "was found. Check that each sheet contains at least 3 rows of "
+                        "numeric data with a kWh column and an independent variable column."
+                    )
+            except Exception as exc:
+                st.warning(f"Could not read regression Excel file: {exc}")
+
         logger.log(f"📄 Reviewing: {main_name} with {len(supporting_bytes)} supporting document(s).")
 
         with st.spinner(f"Generating comments for {main_name}…"):
@@ -581,9 +796,12 @@ if run_btn:
                 mv_bytes,
                 supporting_bytes,
                 ref_no,
+                client_name,
                 esp_name,
                 main_name,
                 facility_name=facility_name,
+                regression_data=regression_data,
+                regression_data_provided=regression_data_provided,
             )
 
         logger.log(f"✅ Done. {result['total']} questions reviewed.")
@@ -608,6 +826,7 @@ if run_btn:
                 f"**Warning — missing SNs:** The following questions were not returned by the AI "
                 f"and have been left blank in the output: **{', '.join(result['missing_sns'])}**"
             )
+
 
         st.download_button(
             "⬇️ Download Excel Output",
