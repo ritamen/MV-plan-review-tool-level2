@@ -709,8 +709,7 @@ with col3:
         help=(
             "FORMAT — one file, one sheet per EEM: if the M&V plan has multiple EEMs "
             "that each use regression, include one sheet in the Excel file for each EEM. "
-            "Each sheet should contain the monthly baseline kWh values and the "
-            "corresponding independent variable values."
+
         ),
     )
 
