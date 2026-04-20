@@ -14,22 +14,27 @@ from dotenv import load_dotenv
 from pypdf import PdfReader
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-BASE_DIR      = Path(__file__).resolve().parent / "app"
-PROMPT_PATH   = BASE_DIR / "assets" / "MV_Plan_Reviewer_Prompt.txt"
-TEMPLATE_PATH = BASE_DIR / "assets" / "M_V_Plan_Review_Sheet.xlsx"
-LOGO_PATH     = BASE_DIR / "static" / "arklogo2.png"
+BASE_DIR           = Path(__file__).resolve().parent / "app"
+PROMPT_PATH        = BASE_DIR / "assets" / "MV_Plan_Reviewer_Prompt.txt"
+CALC_PROMPT_PATH   = BASE_DIR / "assets" / "MV_Calc_Report_Format_Reviewer_Prompt.txt"
+TEMPLATE_PATH      = BASE_DIR / "assets" / "T8_1B_MV_Plan_Review_Sheet.xlsx"
+LOGO_PATH          = BASE_DIR / "static" / "arklogo2.png"
 
 load_dotenv(BASE_DIR.parent / ".env")
 
 sys.path.insert(0, str(BASE_DIR))
 from excel_writer import write_review
-from sn_extractor import extract_expected_sns
+from sn_extractor import extract_expected_sns, extract_expected_sns_for_sheet
 from regression_verifier import verify_all
+from calc_sheet_analyzer import analyze_calc_sheet
 
 # ── Load assets once ──────────────────────────────────────────────────────────
-REVIEWER_PROMPT: str   = PROMPT_PATH.read_text(encoding="utf-8")
-TEMPLATE_BYTES:  bytes = TEMPLATE_PATH.read_bytes()
-EXPECTED_SNS           = extract_expected_sns(str(TEMPLATE_PATH))
+REVIEWER_PROMPT: str      = PROMPT_PATH.read_text(encoding="utf-8")
+CALC_REVIEWER_PROMPT: str = CALC_PROMPT_PATH.read_text(encoding="utf-8")
+TEMPLATE_BYTES:  bytes    = TEMPLATE_PATH.read_bytes()
+EXPECTED_SNS              = extract_expected_sns(str(TEMPLATE_PATH))
+EXPECTED_SNS_SHEET2       = extract_expected_sns_for_sheet(str(TEMPLATE_PATH), "2. M&V Calculations")
+EXPECTED_SNS_SHEET3       = extract_expected_sns_for_sheet(str(TEMPLATE_PATH), "3. Sample M&V Reports")
 
 # ── API constants ─────────────────────────────────────────────────────────────
 MODEL           = "claude-sonnet-4-6"
@@ -39,8 +44,9 @@ TIMEOUT_SECS    = 180
 MAX_PDF_PAGES   = 100
 MAX_SUPPORTING_TEXT_CHARS = 400_000
 
-VALID_INCLUDED = {"Yes", "No", "Partial"}
-VALID_STATUS   = {"Approved", "Not Approved", "Incomplete"}
+VALID_INCLUDED      = {"Yes", "No", "Partial"}
+VALID_STATUS        = {"Approved", "Not Approved", "Incomplete"}
+VALID_CALC_STATUS   = {"APP", "IR", "NA"}
 
 logging.basicConfig(level=logging.INFO)
 
@@ -190,7 +196,95 @@ def _call_claude_retry(client, user_content: list, first_raw: str) -> str:
     )
     return _extract_json_text(response)
 
-def run_mv_review(mv_bytes, supporting_bytes, ref_no, client_name, esp_name, mv_filename, facility_name="", regression_data=None, regression_data_provided=False, debug_chunks=False):
+
+def _validate_calc_items(items: list, label: str) -> list:
+    errors = []
+    for i, item in enumerate(items):
+        if not isinstance(item, dict):
+            errors.append(f"{label}[{i}] is not a dict"); continue
+        for field in ("sn", "included", "status", "comment"):
+            if field not in item:
+                errors.append(f"{label}[{i}] missing field '{field}'")
+        if "included" in item and item["included"] not in VALID_INCLUDED:
+            errors.append(f"{label}[{i}] invalid included={item['included']!r}")
+        if "status" in item and item["status"] not in VALID_CALC_STATUS:
+            errors.append(f"{label}[{i}] invalid status={item['status']!r}")
+    return errors
+
+
+def _parse_and_validate_calc(raw: str):
+    cleaned = _strip_fences(raw)
+    try:
+        obj = json.loads(cleaned)
+    except json.JSONDecodeError as exc:
+        return {}, [f"JSON parse error: {exc}"]
+    if not isinstance(obj, dict):
+        return {}, ["Response is not a JSON object"]
+    if "sheet3" not in obj:
+        return {}, ["Missing key 'sheet3'"]
+    errors = _validate_calc_items(obj["sheet3"], "sheet3")
+    return obj, errors
+
+
+def _build_calc_user_content(report_bytes: bytes) -> list:
+    """Build AI content for Sheet 3 only — the Sample M&V Report PDF.
+    Sheet 2 is handled by Python (analyze_calc_sheet), so the Excel is not sent here."""
+    content = []
+    _add_pdf_to_content(content, report_bytes, "Sample M&V Report")
+    content.append({
+        "type": "text",
+        "text": (
+            "Review the Sample M&V Report against every question listed under "
+            "SHEET 3 — SAMPLE M&V REPORT REVIEW in your instructions. "
+            "Return a single valid JSON object with one key 'sheet3' only — "
+            "no markdown, no explanation, no text outside the object. "
+            "Each array element: { sn, included, status, comment }."
+        ),
+    })
+    return content
+
+
+def _call_claude_calc(client, user_content: list) -> str:
+    import anthropic
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=MAX_TOKENS,
+        temperature=1,
+        thinking={"type": "enabled", "budget_tokens": THINKING_TOKENS},
+        system=CALC_REVIEWER_PROMPT,
+        messages=[{"role": "user", "content": user_content}],
+        timeout=TIMEOUT_SECS,
+    )
+    return _extract_json_text(response)
+
+
+def _call_claude_calc_retry(client, user_content: list, first_raw: str) -> str:
+    import anthropic
+    retry_messages = [
+        {"role": "user",      "content": user_content},
+        {"role": "assistant", "content": first_raw},
+        {"role": "user",      "content": (
+            "Your previous response was invalid. Return ONLY a JSON object with one key: 'sheet3'. "
+            "It must be an array of items, each with: "
+            "sn (string), included (Yes/No/Partial), status (APP/IR/NA), comment (string, never blank). "
+            "Nothing else."
+        )},
+    ]
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=MAX_TOKENS,
+        temperature=1,
+        thinking={"type": "enabled", "budget_tokens": THINKING_TOKENS},
+        system=CALC_REVIEWER_PROMPT,
+        messages=retry_messages,
+        timeout=TIMEOUT_SECS,
+    )
+    return _extract_json_text(response)
+
+
+def run_mv_review(mv_bytes, supporting_bytes, ref_no, client_name, esp_name, mv_filename,
+                  facility_name="", regression_data=None, regression_data_provided=False,
+                  calc_bytes=None, report_bytes=None, debug_chunks=False):
     import anthropic
 
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -252,11 +346,72 @@ def run_mv_review(mv_bytes, supporting_bytes, ref_no, client_name, esp_name, mv_
         except Exception as e:
             logging.warning("Regression verification skipped: %s", e)
 
+    # ── Calc & Report review (Sheets 2 & 3) ──────────────────────────────────
+    calc_review_sheet2: dict = {}
+    calc_review_sheet3: dict = {}
+    calc_stats: dict = {}
+    missing_sns_sheet2: list = []
+    missing_sns_sheet3: list = []
+
+    if calc_bytes and report_bytes:
+        # ── Sheet 2: Python-only structural analysis (no AI cost) ─────────────
+        try:
+            calc_review_sheet2 = analyze_calc_sheet(calc_bytes)
+            logging.info("Sheet 2 analyzed by Python: %d questions answered.", len(calc_review_sheet2))
+        except Exception as exc:
+            logging.warning("Sheet 2 Python analysis failed: %s", exc)
+            calc_review_sheet2 = {}
+
+        missing_sns_sheet2 = sorted(set(EXPECTED_SNS_SHEET2) - set(calc_review_sheet2))
+
+        # ── Sheet 3: AI reviews the Sample M&V Report PDF ─────────────────────
+        report_content = _build_calc_user_content(report_bytes)
+        try:
+            calc_raw = _call_claude_calc(client, report_content)
+        except Exception as exc:
+            logging.warning("Sheet 3 AI review failed: %s", exc)
+            calc_raw = ""
+
+        sheet3_items = []
+        if calc_raw:
+            calc_obj, calc_errors = _parse_and_validate_calc(calc_raw)
+            if calc_errors:
+                logging.warning("Sheet 3 initial response invalid: %s. Retrying…", calc_errors)
+                calc_raw = _call_claude_calc_retry(client, report_content, calc_raw)
+                calc_obj, calc_errors = _parse_and_validate_calc(calc_raw)
+                if calc_errors:
+                    logging.error("Sheet 3 retry also invalid: %s", calc_errors)
+                    calc_obj = {}
+            if calc_obj:
+                sheet3_items = calc_obj.get("sheet3", [])
+                calc_review_sheet3 = {str(it["sn"]).strip(): it for it in sheet3_items}
+                missing_sns_sheet3 = sorted(set(EXPECTED_SNS_SHEET3) - set(calc_review_sheet3))
+
+        sheet2_items = list(calc_review_sheet2.values())
+        calc_stats = {
+            "sheet2": {
+                "total":   len(sheet2_items),
+                "app":     sum(1 for it in sheet2_items if it.get("status") == "APP"),
+                "ir":      sum(1 for it in sheet2_items if it.get("status") == "IR"),
+                "na":      sum(1 for it in sheet2_items if it.get("status") == "NA"),
+            },
+            "sheet3": {
+                "total":   len(sheet3_items),
+                "app":     sum(1 for it in sheet3_items if it.get("status") == "APP"),
+                "ir":      sum(1 for it in sheet3_items if it.get("status") == "IR"),
+                "na":      sum(1 for it in sheet3_items if it.get("status") == "NA"),
+            },
+        }
+        logging.info("Hybrid review complete: Sheet 2 (Python) %d items, Sheet 3 (AI) %d items.",
+                     len(sheet2_items), len(sheet3_items))
+
     filled_bytes = write_review(TEMPLATE_BYTES, review_by_sn,
                                ref_no=ref_no, client_name=client_name,
                                esp_name=esp_name, facility_name=facility_name,
                                regression_results=regression_results,
-                               regression_data_provided=regression_data_provided)
+                               regression_data_provided=regression_data_provided,
+                               calc_review_sheet2=calc_review_sheet2,
+                               calc_review_sheet3=calc_review_sheet3)
 
     base_name = mv_filename.replace(".pdf", "")
     parts = ["MV_Plan_Review"]
@@ -274,6 +429,9 @@ def run_mv_review(mv_bytes, supporting_bytes, ref_no, client_name, esp_name, mv_
         "excel_bytes":         filled_bytes,
         "filename":            output_filename,
         "regression_results":  regression_results,
+        "calc_stats":          calc_stats,
+        "missing_sns_sheet2":  missing_sns_sheet2,
+        "missing_sns_sheet3":  missing_sns_sheet3,
     }
 
 
@@ -680,7 +838,7 @@ st.markdown(
 # ---------------- Upload Section ----------------
 st.markdown(
     """
-    <div class="ark-section"><div class="ark-section-title">Upload documents</div></div>
+    <div class="ark-section"><div class="ark-section-title">M&amp;V Plan Review</div></div>
     <div class="ark-section-rule"></div>
     """,
     unsafe_allow_html=True,
@@ -689,7 +847,7 @@ st.markdown(
 col1, col2, col3 = st.columns(3)
 with col1:
     main_pdf_upload = st.file_uploader(
-        "M&V plan",
+        "M&V Plan",
         type=["pdf"],
         accept_multiple_files=False,
         help="This is the document that will be reviewed.",
@@ -708,9 +866,32 @@ with col3:
         accept_multiple_files=False,
         help=(
             "FORMAT — one file, one sheet per EEM: if the M&V plan has multiple EEMs "
-            "that each use regression, include one sheet in the Excel file for each EEM. "
-
+            "that each use regression, include one sheet in the Excel file for each EEM."
         ),
+    )
+
+st.markdown(
+    """
+    <div class="ark-section" style="margin-top:18px;"><div class="ark-section-title">M&amp;V Calculations &amp; Sample Report Review</div></div>
+    <div class="ark-section-rule"></div>
+    """,
+    unsafe_allow_html=True,
+)
+
+col4, col5 = st.columns(2)
+with col4:
+    calc_excel_upload = st.file_uploader(
+        "M&V Calculation Sheet",
+        type=["xlsx"],
+        accept_multiple_files=False,
+        help="The ESP's submitted M&V calculation workbook (Excel).",
+    )
+with col5:
+    report_pdf_upload = st.file_uploader(
+        "Sample M&V Report",
+        type=["pdf"],
+        accept_multiple_files=False,
+        help="The ESP's submitted sample M&V report (PDF).",
     )
 
 # Also inject via component to reach inside Streamlit's shadow-dom-like iframes
@@ -790,6 +971,15 @@ if run_btn:
         st.warning("Please upload the main document PDF.")
         st.stop()
 
+    # Warn if only one of calc/report is provided
+    calc_pair_ok = calc_excel_upload is not None and report_pdf_upload is not None
+    if (calc_excel_upload is None) != (report_pdf_upload is None):
+        st.warning(
+            "Both the **M&V Calculation Sheet** and the **Sample M&V Report** must be "
+            "uploaded together to review Sheets 2 & 3. Only one was provided — "
+            "Sheets 2 & 3 will be skipped."
+        )
+
     log_box = st.empty()
     logger  = StreamlitLogger(log_box)
 
@@ -815,9 +1005,15 @@ if run_btn:
             except Exception as exc:
                 st.warning(f"Could not read regression Excel file: {exc}")
 
-        logger.log(f"📄 Reviewing: {main_name} with {len(supporting_bytes)} supporting document(s).")
+        # ── Read calc/report uploads ───────────────────────────────────────────
+        calc_bytes  = calc_excel_upload.read()  if calc_pair_ok else None
+        report_bytes = report_pdf_upload.read() if calc_pair_ok else None
 
-        with st.spinner(f"Generating comments for {main_name}…"):
+        logger.log(f"📄 Reviewing M&V Plan: {main_name} with {len(supporting_bytes)} supporting document(s).")
+        if calc_pair_ok:
+            logger.log("📊 M&V Calculation Sheet and Sample M&V Report loaded — Sheets 2 & 3 will be reviewed.")
+
+        with st.spinner("Generating comments… this may take up to 3 minutes."):
             result = run_mv_review(
                 mv_bytes,
                 supporting_bytes,
@@ -828,9 +1024,14 @@ if run_btn:
                 facility_name=facility_name,
                 regression_data=regression_data,
                 regression_data_provided=regression_data_provided,
+                calc_bytes=calc_bytes,
+                report_bytes=report_bytes,
             )
 
-        logger.log(f"✅ Done. {result['total']} questions reviewed.")
+        logger.log(f"✅ Done. Sheet 1: {result['total']} questions reviewed."
+                   + (f" Sheet 2 & 3: {result['calc_stats'].get('sheet2',{}).get('total',0)} + "
+                      f"{result['calc_stats'].get('sheet3',{}).get('total',0)} questions."
+                      if result.get("calc_stats") else ""))
 
         st.markdown(
             """
@@ -841,6 +1042,8 @@ if run_btn:
         )
         st.success("Review completed successfully.")
 
+        # ── Sheet 1 stats ─────────────────────────────────────────────────────
+        st.markdown("**Sheet 1 — M&V Plan Review**")
         c1, c2, c3, c4 = st.columns(4)
         c1.markdown(f'<div class="stat-card"><div class="stat-number color-blue">{result["total"]}</div><div class="stat-label">Questions Reviewed</div></div>', unsafe_allow_html=True)
         c2.markdown(f'<div class="stat-card"><div class="stat-number color-green">{result["approved"]}</div><div class="stat-label">Approved</div></div>', unsafe_allow_html=True)
@@ -849,10 +1052,33 @@ if run_btn:
 
         if result["missing_sns"]:
             st.warning(
-                f"**Warning — missing SNs:** The following questions were not returned by the AI "
-                f"and have been left blank in the output: **{', '.join(result['missing_sns'])}**"
+                f"**Warning — Sheet 1 missing SNs:** {', '.join(result['missing_sns'])}"
             )
 
+        # ── Sheet 2 & 3 stats ─────────────────────────────────────────────────
+        if result.get("calc_stats"):
+            s2 = result["calc_stats"].get("sheet2", {})
+            s3 = result["calc_stats"].get("sheet3", {})
+
+            st.markdown("**Sheet 2 — M&V Calculations Review**")
+            d1, d2, d3, d4 = st.columns(4)
+            d1.markdown(f'<div class="stat-card"><div class="stat-number color-blue">{s2.get("total",0)}</div><div class="stat-label">Questions Reviewed</div></div>', unsafe_allow_html=True)
+            d2.markdown(f'<div class="stat-card"><div class="stat-number color-green">{s2.get("app",0)}</div><div class="stat-label">Approved (APP)</div></div>', unsafe_allow_html=True)
+            d3.markdown(f'<div class="stat-card"><div class="stat-number color-orange">{s2.get("ir",0)}</div><div class="stat-label">Incomplete (IR)</div></div>', unsafe_allow_html=True)
+            d4.markdown(f'<div class="stat-card"><div class="stat-number color-red">{s2.get("na",0)}</div><div class="stat-label">Not Approved (NA)</div></div>', unsafe_allow_html=True)
+
+            if result.get("missing_sns_sheet2"):
+                st.warning(f"**Warning — Sheet 2 missing SNs:** {', '.join(result['missing_sns_sheet2'])}")
+
+            st.markdown("**Sheet 3 — Sample M&V Report Review**")
+            e1, e2, e3, e4 = st.columns(4)
+            e1.markdown(f'<div class="stat-card"><div class="stat-number color-blue">{s3.get("total",0)}</div><div class="stat-label">Questions Reviewed</div></div>', unsafe_allow_html=True)
+            e2.markdown(f'<div class="stat-card"><div class="stat-number color-green">{s3.get("app",0)}</div><div class="stat-label">Approved (APP)</div></div>', unsafe_allow_html=True)
+            e3.markdown(f'<div class="stat-card"><div class="stat-number color-orange">{s3.get("ir",0)}</div><div class="stat-label">Incomplete (IR)</div></div>', unsafe_allow_html=True)
+            e4.markdown(f'<div class="stat-card"><div class="stat-number color-red">{s3.get("na",0)}</div><div class="stat-label">Not Approved (NA)</div></div>', unsafe_allow_html=True)
+
+            if result.get("missing_sns_sheet3"):
+                st.warning(f"**Warning — Sheet 3 missing SNs:** {', '.join(result['missing_sns_sheet3'])}")
 
         st.download_button(
             "⬇️ Download Excel Output",

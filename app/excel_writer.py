@@ -55,6 +55,22 @@ STATUS_STYLES = {
 COMMENT_BG = "FFFF99"
 COMMENT_FC = "000000"
 
+# ── Calc/Report sheet style maps (APP / IR / NA, font size 11) ───────────────
+CALC_FONT_SIZE = 11
+CALC_BORDER_COLOR = "BFBFBF"
+
+CALC_INCLUDED_STYLES = {
+    "Yes":     {"bg": "C6EFCE", "fc": "375623"},
+    "No":      {"bg": "FFC7CE", "fc": "9C0006"},
+    "Partial": {"bg": "FFEB9C", "fc": "9C6500"},
+}
+
+CALC_STATUS_STYLES = {
+    "APP": {"bg": "C6EFCE", "fc": "375623"},
+    "IR":  {"bg": "FFEB9C", "fc": "9C6500"},
+    "NA":  {"bg": "FFC7CE", "fc": "9C0006"},
+}
+
 
 def _make_border() -> Border:
     s = Side(style="thin", color=BORDER_COLOR)
@@ -178,10 +194,100 @@ def _build_regression_comment(regression_results: list) -> str:
     return "\n\n" + "\n\n".join(blocks)
 
 
+def _make_calc_border() -> Border:
+    s = Side(style="thin", color=CALC_BORDER_COLOR)
+    return Border(left=s, right=s, top=s, bottom=s)
+
+
+def _write_calc_sheet(ws, review_by_sn: dict,
+                      facility_name: str = "", ref_no: str = "",
+                      today_str: str = "") -> None:
+    """
+    Write APP/IR/NA review results into Sheet 2 or Sheet 3.
+    Structure mirrors Sheet 1: data rows from row 22, col B = SN,
+    cols H/I/J = Included / Active Status / Consultant's Comments.
+    """
+    if not review_by_sn:
+        return
+
+    # ── Header fields ─────────────────────────────────────────────────────────
+    if facility_name:
+        ws.cell(row=6, column=3).value = facility_name
+    if ref_no:
+        ws.cell(row=7, column=3).value = ref_no
+
+    # Round 1 dates
+    if today_str:
+        for col in (3, 4, 5):
+            ws.cell(row=15, column=col).value = today_str
+
+    # ── Overall assessment (row 15, col F) ───────────────────────────────────
+    all_app = all(it.get("status") == "APP" for it in review_by_sn.values())
+    assessment = "APP" if all_app else "NA"
+    ast_s = CALC_STATUS_STYLES[assessment]
+    cell = ws.cell(row=15, column=6)
+    cell.value = assessment
+    cell.font = Font(name=FONT_NAME, size=CALC_FONT_SIZE, color=ast_s["fc"], bold=True)
+    cell.fill = _make_fill(ast_s["bg"])
+    cell.alignment = Alignment(horizontal="center", vertical="center")
+    cell.border = _make_calc_border()
+
+    # ── Data rows ─────────────────────────────────────────────────────────────
+    border = _make_calc_border()
+    for row_idx in range(DATA_START, ws.max_row + 1):
+        sn_val = ws.cell(row=row_idx, column=COL_SN).value
+        if _is_section_header(sn_val):
+            continue
+
+        sn = str(sn_val).strip()
+        if sn not in review_by_sn:
+            continue
+
+        item     = review_by_sn[sn]
+        included = item.get("included", "")
+        status   = item.get("status", "")
+        comment  = item.get("comment", "") or ""
+
+        # Included (col H)
+        inc_s = CALC_INCLUDED_STYLES.get(included, {"bg": "FFFFFF", "fc": "000000"})
+        cell = ws.cell(row=row_idx, column=COL_INCL)
+        cell.value = included
+        cell.font = Font(name=FONT_NAME, size=CALC_FONT_SIZE, color=inc_s["fc"], bold=True)
+        cell.fill = _make_fill(inc_s["bg"])
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = border
+
+        # Active Status (col I)
+        st_s = CALC_STATUS_STYLES.get(status, {"bg": "FFFFFF", "fc": "000000"})
+        cell = ws.cell(row=row_idx, column=COL_STATUS)
+        cell.value = status
+        cell.font = Font(name=FONT_NAME, size=CALC_FONT_SIZE, color=st_s["fc"], bold=True)
+        cell.fill = _make_fill(st_s["bg"])
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = border
+
+        # Consultant's Comments (col J)
+        cell = ws.cell(row=row_idx, column=COL_COMMENT)
+        cell.value = comment
+        if comment:
+            cell.font = Font(name=FONT_NAME, size=CALC_FONT_SIZE, color=COMMENT_FC)
+            cell.fill = _make_fill(COMMENT_BG)
+            cell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+            lines = len(comment) // 80 + comment.count("\n") + 1
+            ws.row_dimensions[row_idx].height = max(30, lines * 15)
+        else:
+            cell.font = Font(name=FONT_NAME, size=CALC_FONT_SIZE, color=COMMENT_FC)
+            cell.fill = _make_fill("FFFFFF")
+            cell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+        cell.border = border
+
+
 def write_review(template_bytes: bytes, review_by_sn: dict,
                  ref_no: str = "", client_name: str = "", esp_name: str = "",
                  facility_name: str = "", regression_results: list = None,
-                 regression_data_provided: bool = False) -> bytes:
+                 regression_data_provided: bool = False,
+                 calc_review_sheet2: dict = None,
+                 calc_review_sheet3: dict = None) -> bytes:
     """
     Load the Excel template from bytes, write review results, return as bytes.
 
@@ -349,6 +455,18 @@ def write_review(template_bytes: bytes, review_by_sn: dict,
                 "", bg="FFFFFF", fc=COMMENT_FC,
                 wrap=True, align="left"
             )
+
+    # ── Sheets 2 & 3 — M&V Calculations and Sample M&V Reports ──────────────
+    if calc_review_sheet2 and "2. M&V Calculations" in wb.sheetnames:
+        _write_calc_sheet(
+            wb["2. M&V Calculations"], calc_review_sheet2,
+            facility_name=facility_name, ref_no=ref_no, today_str=today_str,
+        )
+    if calc_review_sheet3 and "3. Sample M&V Reports" in wb.sheetnames:
+        _write_calc_sheet(
+            wb["3. Sample M&V Reports"], calc_review_sheet3,
+            facility_name=facility_name, ref_no=ref_no, today_str=today_str,
+        )
 
     out = io.BytesIO()
     wb.save(out)

@@ -26,21 +26,25 @@ def _is_whole_integer(value) -> bool:
 
 
 def extract_expected_sns(template_path: str) -> List[str]:
+    """Return question SNs from Sheet '1. M&V plan_V2.0'."""
+    return extract_expected_sns_for_sheet(template_path, "1. M&V plan_V2.0")
+
+
+def extract_expected_sns_for_sheet(template_path: str, sheet_name: str) -> List[str]:
     """
-    Open the Excel template and return the authoritative list of question SNs.
+    Open the Excel template and return the authoritative list of question SNs
+    for the given sheet name.
 
     Rules:
     - Scan column B from row 22 onwards.
-    - Skip blank cells and whole-integer rows (section headers 0–17).
-    - Skip any SN that is a dot-prefix of another SN in the sheet
-      (e.g. '6.3' is skipped because '6.3.1' exists → it's a sub-section header).
+    - Skip blank cells and whole-integer rows (section headers).
+    - Skip any SN that is a dot-prefix of another SN (sub-section headers).
 
-    Returns a list like ["0.1", "1.1", ..., "6.3.1", ..., "17.1"].
+    Returns a list like ["0.1", "1.1", ..., "6.3.1"].
     """
     wb = openpyxl.load_workbook(template_path, read_only=True, data_only=True)
-    ws = wb["1. M&V plan_V2.0"]
+    ws = wb[sheet_name]
 
-    # First pass: collect every non-blank, non-integer SN as a string
     candidates: List[str] = []
     for row in ws.iter_rows(min_row=22, min_col=2, max_col=2, values_only=True):
         value = row[0]
@@ -50,8 +54,6 @@ def extract_expected_sns(template_path: str) -> List[str]:
 
     wb.close()
 
-    # Second pass: drop any SN that is a dot-prefix of another SN
-    # e.g. "6.3" is dropped because "6.3.1" starts with "6.3."
     candidate_set = set(candidates)
     questions = [
         sn for sn in candidates
