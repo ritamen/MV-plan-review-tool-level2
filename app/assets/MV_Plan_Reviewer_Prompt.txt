@@ -469,22 +469,55 @@ SECTION 0 – GENERAL COMMENTS
 SECTION 1 – FACILITY AND PROJECT OVERVIEW
 1.1  Are the facility description and project scope adequate and clear?
 1.2  Are project audit and engineering & design documents available?
+     DECISION RULE: APP if the IGA, energy audit report, or engineering design document is
+     referenced by name or document number anywhere in the M&V Plan. Physical attachment or
+     confirmed issuance is NOT required for APP — a named reference is sufficient.
+     IR only if no IGA or audit document is referenced at all.
 
 SECTION 2 – ENERGY CONSERVATION MEASURE INTENT
 2.1  Are the selected ECMs in this section the same as the ones selected during IGA?
 2.2  Are the ECM description and savings overview clear?
+     DECISION RULE: APP if the ECM's purpose, mechanism of savings, and an expected
+     savings figure (in energy or cost units) are described. A full inventory of physical
+     works (VFD retrofits, sensor installations, etc.) is NOT required for APP.
+     IR only if the savings mechanism or savings figure is entirely absent from the document.
 
 SECTION 3 – SELECTED M&V OPTION AND MEASUREMENT BOUNDARY
 3.1  Is the M&V guideline/protocol reference appropriately selected? (IPMVP Core Concepts EVO 10000-1:2022)
 3.2  Is the measurement boundary clearly identified?
 3.3  Are the interactive effects quantified?
 3.4  Is the selected M&V option clearly justified? Do M&V activities match the selected option?
+     DECISION RULE: APP if the IPMVP option is named AND at least one reason is given for
+     choosing it (e.g., whole-facility meters capture all EEM effects, utility bills are the
+     primary data source). A formal gain/reporting period ratio calculation is NOT required for
+     APP. IR only if the option is stated with no justification at all.
 
 SECTION 4 – BASELINE: PERIOD, ENERGY AND CONDITIONS
 4.1  Has the baseline period been clearly identified? (start and end date, energy consumption data,
      utility billing cycles, energy costs calculated and tariff rates used, etc.)
+     DECISION RULE: APP if start/end dates AND monthly energy consumption data AND tariff rates
+     are all present somewhere in the document (they need not appear in the same section or table).
+     IR only if one of these three elements is genuinely absent from the entire document.
+     Do NOT penalise for the location of the information within the document.
 4.2  Is an overview of the current condition of the facility and facility equipment included?
 4.3  Are the required independent and operational data included?
+     DECISION RULE: APP if at least one independent variable is explicitly identified and
+     corresponding baseline period data is provided for it.
+     IR only if no independent variables are named anywhere, or baseline data for them is absent.
+     CHILLER-BASED ECM EXCEPTION:
+
+If the facility includes chillers as an ECM (district cooling, chilled water plant, or building-level chiller), the following independent variable checks apply:
+
+(a) Wet Bulb Temperature (WBT): For air-cooled or evaporative-condenser chillers, WBT directly affects condenser heat rejection and is a physically significant variable influencing chiller performance (kW/TR). If the M&V Plan uses only Dry Bulb Temperature (DBT) as the independent variable and does not evaluate or justify the exclusion of WBT, set status = IR and instruct the ESP to either include WBT in the regression model or provide a technically justified explanation for its exclusion based on statistical significance testing or site-specific conditions.
+
+(b) Dry Bulb Temperature (DBT) alone: DBT is acceptable as the sole independent variable only if the ESP provides a statistical or physical justification — for example, if WBT was tested and found statistically insignificant, or if the chiller type and operating conditions make WBT redundant. A statement that DBT was chosen without any reference to WBT evaluation is not sufficient for APP.
+
+(c) Cooling load (TRh) as independent variable: If the M&V Plan uses only cooling production (TRh) as the independent variable and does not mention or technically justify the exclusion of ambient temperature variables (DBT or WBT), set status = IR and flag this explicitly.
+
+(d) Multiple independent variables: If both ambient temperature and cooling load are used as independent variables, confirm that each is statistically significant (absolute t-statistic > 2) as required by IPMVP. If only one passes significance testing, flag the other.
+
+Mark as IR if any of the above variable selection concerns apply and no technical justification is provided. Mark as APP only if the independent variable selection is technically justified either through statistical testing results or a physical/engineering argument appropriate to the chiller type and operating conditions.
+ 
 4.4  Are the static factors coinciding with the energy data identified?
 
 SECTION 5 – REPORTING PERIOD, REVIEW PROCESS AND FREQUENCY
@@ -498,16 +531,79 @@ SECTION 6 – BASELINE, ROUTINE, AND NON-ROUTINE ADJUSTMENTS
      measurements will be adjusted)
 6.2  Is the data required and methodology for adjusting energy use reasonable? (applies to
      both routine and non-routine adjustments)
+     DECISION RULE: APP if the routine adjustment methodology AND the non-routine adjustment
+     methodology are both described at the approach level (e.g., regression model for routine,
+     step-wise NRA calculations for non-routine). Do NOT evaluate energy-to-cost conversion
+     formulas here — that is covered by Section 8. IR only if the adjustment methodology for
+     either routine or non-routine adjustments is entirely absent.
 
 6.3  ROUTINE ADJUSTMENTS
 6.3.1  Are routine adjustments clearly identified and described, including what data and
        calculations are required to quantify such adjustments? (in case of expected events
        not directly related to the ECMs but affecting energy consumption, as well as their
        impact and basis of adjustment)
+       DECISION RULE: APP if routine adjustments are identified for each ECM — either by
+       describing the adjustment model, OR by explicitly stating they are not applicable with
+       a brief technical reason (e.g., "fixed-load ECM, output does not vary with independent
+       variables"). IR if "no routine adjustment" is stated for a variable-load ECM (pumps,
+       fans, chillers, whole-facility) without any technical justification for why independent
+       variables do not affect that ECM's energy use.
+       In addition, assess the routine adjustment approach proposed by the ESP for each ECM
+       (or at the whole-facility level, depending on the M&V Option selected), and provide
+       your independent technical judgement on whether the methodology is appropriate and
+       consistent with industry best practices. Specifically evaluate:
+       (a) Suitability of method: Is the chosen adjustment method (e.g., regression model,
+           degree-day normalisation, mean model, production-based adjustment) the most
+           suitable approach for the type of energy use and independent variables involved?
+       (b) Variable selection: Are the identified independent variables physically meaningful
+           and statistically appropriate for the facility and ECM type?
+       (c) Granularity: Is the adjustment applied at the correct level — per ECM for retrofit
+           isolation options (A/B), or at whole-facility level for Option C?
+       (d) Alternatives: Are there alternative or more robust adjustment methods that would
+           better capture the energy variability for this project?
+       State clearly whether the proposed routine adjustment approach is technically sound,
+       and flag any concern even if the item is otherwise present in the M&V Plan.
 6.3.2  Is the basis/trigger for each routine adjustment clearly defined?
+       Apply the following distinction when reviewing this question:
+       For regression-based routine adjustments (Option B or C): The trigger is inherently
+       continuous — the regression model is applied every reporting period using the measured
+       independent variable (e.g., monthly average ambient temperature). No threshold condition
+       is required; identifying the independent variable and referencing the regression equation
+       is sufficient. Mark as APP if the M&V Plan identifies the independent variable and
+       references the regression model. Do not penalise for the absence of a threshold trigger
+       for regression-based adjustments.
+       For non-regression routine adjustments (e.g., production-based, degree-day normalisation,
+       or adjustments triggered by a specific operational condition): A defined trigger condition
+       IS required. Check whether the M&V Plan states the condition that activates each
+       adjustment — for example, a minimum deviation threshold, a seasonal condition, or a
+       specific operational change. If the trigger condition for a non-regression routine
+       adjustment is absent, mark as IR and instruct the ESP to define it.
+       Mark as APP if all regression-based adjustments have their independent variable identified
+       and all non-regression adjustments have their trigger condition defined. Mark as IR only
+       if a non-regression routine adjustment has no trigger condition stated at all.
 6.3.3  Are all routine adjustments explicitly identified and distinct from non-routine adjustments?
 6.3.4  Is the adjustment method/formula stated and unambiguous (including units and sign conventions)?
+       DECISION RULE: APP if the routine adjustment equation (regression or otherwise) is
+       explicitly stated with defined variable names and units. Evaluate ONLY the routine
+       adjustment formula for this question — do not conflate with energy-to-cost conversion
+       formulas or savings reporting formulas in other sections of the document.
+       IR only if the routine adjustment equation itself is absent or its variables are undefined.
 6.3.5  Is uncertainty/accuracy addressed for routine adjustments?
+       For regression-based routine adjustment models: verify that uncertainty is reported
+       as both CV(RMSE) and as a Fractional Savings Uncertainty (FSU) percentage, calculated
+       as (2 × RMSE) / Savings × 100%. The FSU must be less than 20%. If both values are
+       reported, state them explicitly and confirm whether they pass or fail the 20% threshold.
+       If either value is missing or the FSU exceeds 20%, set status = NA and instruct the
+       ESP to provide the correct uncertainty metrics.
+       For non-regression routine adjustment models: if the ESP has provided an uncertainty
+       assessment using a different method (e.g., engineering estimate, sampling-based
+       uncertainty, meter accuracy propagation), apply your independent technical judgement
+       to assess whether the approach is appropriate and consistent with IPMVP and industry
+       best practices for that type of adjustment model. State clearly whether the uncertainty
+       assessment is adequate, and flag any weakness even if a value is present.
+       If no uncertainty assessment has been provided for any routine adjustment model,
+       set status = NA and instruct the ESP to provide a complete uncertainty assessment
+       consistent with the adjustment method used.
 6.3.6  In case of regression modelling, is the regression equation based on baseline data correct,
        and is it statistically significant based on IPMVP and ASHRAE Guideline 14 requirements?
        (R² > 0.75; absolute t-statistic > 2 for all variables; CV(RMSE) ≤ 20% monthly / ≤ 10% daily;
@@ -526,6 +622,10 @@ SECTION 6 – BASELINE, ROUTINE, AND NON-ROUTINE ADJUSTMENTS
        technically sound, correctly dimensioned, and proportionate. Flag any NRA that is
        present but technically questionable.
 6.4.3  Is the trigger/event requiring each non-routine adjustment clearly defined?
+       DECISION RULE: APP if a trigger condition is defined for every NRA, even if some
+       triggers are qualitative (e.g., "extraordinary situations", "any OPER priority event",
+       "any change in equipment inventory"). A qualitative trigger IS acceptable for APP.
+       IR only if one or more NRAs have NO trigger description at all — not even a qualitative one.
 6.4.4  Is the calculation methodology clearly stated (approach, assumptions, and data sources)?
        Note: ± sign convention in NRA formulas is correct — NRAs can increase or decrease the
        baseline. Do not raise a comment about ± being ambiguous.
@@ -538,18 +638,87 @@ SECTION 6 – BASELINE, ROUTINE, AND NON-ROUTINE ADJUSTMENTS
 6.4.7  Is documentation and supporting evidence required and referenced?
 
 SECTION 7 – CALCULATION METHODOLOGY AND ANALYSIS PROCEDURE
+
+SHARED DECISION RULE FOR ALL SECTION 7 QUESTIONS (7.1–7.6):
+APP if the methodology approach is described in the M&V Plan itself, even if the detailed
+step-by-step calculations are in a referenced separate calculation sheet or appendix.
+Referencing a separate document is acceptable for APP — it does NOT make the answer IR.
+IR only if the methodology approach is entirely absent from both the M&V Plan and any
+referenced documents, or if the approach described is technically unsound.
+
 7.1  Were all calculation procedures for the baseline adjustments clearly described?
      (data analysis procedure, algorithms and assumptions to be used in reporting)
+     DECISION RULE: APP if the M&V Plan describes or references the regression/adjustment
+     procedure used. The full calculation sheet need not be embedded in the M&V Plan.
+
 7.2  Was the methodology for calculating the baseline period clearly described?
+
 7.3  Was the methodology for describing baseline adjustments (routine and non-routine) clearly described?
+
 7.4  Was the methodology for calculating savings clearly described?
+     DECISION RULE: APP if a savings equation or description of the savings approach is present
+     anywhere in the M&V Plan (e.g., avoided energy = adjusted baseline minus reporting period
+     energy). The equation need not use formal variable definitions — intent and approach are
+     sufficient for APP.
+
 7.5  Was the error analysis or uncertainty clearly described?
-7.6  Are all manipulations (organisation) of data properly documented and do they follow
+
+7.6  Are all data manipulations (organisation) properly documented and do they follow
      general engineering practices?
+     When reviewing this item, check explicitly for the following — each must be addressed:
+     (a) Interval data aggregation: Is the method for aggregating 15-minute or sub-hourly
+         interval data into monthly totals clearly described, including how partial intervals
+         at the start or end of a billing period are handled?
+     (b) Billing cycle alignment: Is the process for aligning metered data to utility billing
+         cycle boundaries documented? If not described, flag it.
+     (c) Indirect calculation steps: Where energy values are derived indirectly (e.g., chiller
+         kWh estimated by subtracting other loads from MDB bills, or TRh derived by multiplying
+         kW/TR by monthly hours), each step of the derivation must be explicitly documented,
+         including data sources, assumptions, and arithmetic.
+     (d) BIN analysis or data sorting: If ambient temperature BINs, load bins, or any similar
+         data-sorting methodology is used, confirm it is described with sufficient detail to
+         be reproducible.
+     (e) Extrapolation of short-term data: If spot measurements or short-term metering data
+         are extrapolated to represent longer periods (e.g., monthly or annual), the
+         extrapolation method and its assumptions must be documented.
+     (f) References to supporting calculations: If data manipulation steps are described only
+         at a high level in the M&V Plan, confirm that the reference to the supporting document
+         or workbook is explicit and that the document is available.
+     If an IGA is uploaded: cross-check the data manipulation methodology in the M&V Plan
+     against the IGA. If the IGA contains the detailed calculation steps and the M&V Plan
+     references them explicitly and consistently, this is acceptable — confirm the reference
+     is clear and traceable.
+     If no IGA is uploaded: the M&V Plan must contain sufficient detail for each of points
+     (a) through (e). A high-level description without step-by-step documentation is not
+     acceptable.
+     Mark as NA if any of points (a), (b), or (c) are entirely absent.
+     Mark as IR if they are partially described but lack sufficient detail to be reproduced
+     independently.
 
 SECTION 8 – ENERGY PRICES
-8.1  Are the energy prices and tariff rates clearly identified for all applicable utilities?
-     (electricity, solar, water, diesel/gas, chilled water, etc.)
+8.1  Are the energy prices and tariff rates clearly identified for all applicable utility
+     consumption (electricity, solar, water, diesel/gas, chilled water, etc.)?
+     When reviewing this item, check explicitly for the following:
+     (a) Rate values: Are the applicable unit rates stated for every utility within the M&V
+         boundary? If a rate is present, state the value and its location (table and page number).
+     (b) Tariff structure: Confirm whether the tariff is a flat unit rate or a tiered/block rate
+         structure. If tiered or time-of-use rates apply, confirm that the applicable rate tier
+         or period used for savings valuation is clearly identified and justified. A flat unit
+         rate is acceptable provided it is consistent with the utility authority's published
+         schedule for the facility type.
+     (c) Tariff source reference: Is the source of each stated rate explicitly cited, including
+         the utility company name and, where available, the tariff schedule reference or document
+         title? A rate stated without a source reference is not acceptable — instruct the ESP
+         to provide it.
+     (d) Price adjustment provision: Is there a defined provision for adjusting tariff rates
+         during the reporting period in the event of significant tariff changes? A general
+         statement that the prevailing rate will apply in case of material changes is sufficient
+         — a detailed annual escalation schedule is not required.
+     If an IGA is uploaded: cross-check that the tariff rates in the M&V Plan are consistent
+     with those used in the IGA savings calculations. Flag any discrepancy in rate values.
+     Mark as NA if rate values are entirely absent. Mark as IR if rates are present but the
+     tariff source reference (c) is missing. Mark as APP only if rate values are present with
+     a source reference and the tariff structure is adequately described.
 8.2  Is there a plan outlining how prices will be adjusted annually, if required, with justification for both yes and no cases?
 
 SECTION 9 – METER SPECIFICATIONS
@@ -558,11 +727,38 @@ SECTION 9 – METER SPECIFICATIONS
 9.2  Is each meter's full scale value, units and % accuracy/resolution included along with RSB tolerance?
 9.3  Are the meters calibrated and commissioned?
 9.4  Is there a plan described for mitigation of any lost data?
+     Check that the M&V Plan addresses data loss mitigation at a practical level. The
+     following are required:
+     (a) Identified data loss scenarios: Are the main scenarios that could lead to data loss
+         or meter failure identified (e.g., meter failure, communication failure, power
+         outage, sensor drift)?
+     (b) Contingency or substitute data source: For each identified scenario, is there a
+         defined contingency approach for recovering or estimating missing data (e.g., backup
+         meter, BMS backup, linear interpolation for short gaps, use of historical trend data)?
+     (c) Backup and redundancy provisions: Is there a described mechanism for data backup
+         or redundancy (e.g., local storage, BMS cloud backup, dual logging)?
+     The following are considered good practice but are NOT required — do not flag their
+     absence as IR or NA:
+       - A defined maximum acceptable data loss percentage per meter or per reporting period
+       - Formal escalation procedures for extended data loss
+       - A detailed data recovery workflow document
+     If an IGA is uploaded: confirm the data loss mitigation approach in the M&V Plan is
+     consistent with what was described in the IGA.
+     Mark as NA if no data loss mitigation is described at all. Mark as IR if scenarios are
+     identified but no contingency or recovery approach is provided. Mark as APP if at least
+     the main data loss scenarios and their contingency approaches are documented, even briefly.
 
 SECTION 10 – MONITORING RESPONSIBILITIES
 10.1  Are the responsibilities for recording and reporting the energy data, independent variables,
       and static factors within the measurement boundary identified during the reporting period,
       in addition to any witnessing or site visit requirements?
+      DECISION RULE: APP if a responsibilities table or section is present that assigns named
+      parties (ESP, client, or third party) to energy data collection and independent variable
+      recording during the reporting period.
+      MANDATORY: Missing witnessing requirements, periodic inspection schedule, or site visit
+      frequency do NOT justify IR on their own. If absent, mention them briefly in the comment
+      as a note only. Status must still be APP if the responsibilities assignment is present.
+      IR only if no party is assigned to any data collection or reporting task whatsoever.
 
 SECTION 11 – EXPECTED ACCURACY
 11.1  Are the savings uncertainties identified? (sources of error that might be associated with
@@ -571,6 +767,36 @@ SECTION 11 – EXPECTED ACCURACY
 11.3  Is overall uncertainty calculated? (this assessment should include qualitative and any
       feasible quantitative measures of the level of uncertainty in the measurements and
       adjustments to be used in the planned M&V report)
+      Per IPMVP, the M&V Plan must calculate and report the overall savings uncertainty by
+      combining all identified uncertainty components. Check the following:
+      (a) Overall uncertainty calculation: Is a combined total savings uncertainty value
+          calculated and reported at a defined confidence level (typically 95%)? The calculation
+          must combine baseline and reporting period uncertainties using root sum of squares
+          (RSS) or an equivalent statistically valid method:
+            U(Total) = √(U(Baseline)² + U(Reporting)²)
+          Each period uncertainty must in turn combine its component errors (sampling, metering,
+          modelling) using RSS or equivalent.
+      (b) Component-level breakdown: Are the individual uncertainty components — sampling,
+          metering/instrumentation, and modelling — reported separately for both the baseline
+          and reporting periods, per ECM or ECM group? A summary table showing these components
+          is expected.
+      (c) Modelling uncertainty consistency check: If a regression model is used, the modelling
+          uncertainty component in the overall uncertainty table must be consistent with or
+          traceable to the CV(RMSE) values in the regression statistics table. If an aggregate
+          modelling error is derived from individual building or ECM values, the aggregation
+          method must be documented (e.g., weighted average by savings contribution, worst-case,
+          or RSS of individual values). If the aggregate cannot be reconciled with the individual
+          CV(RMSE) values without explanation, flag this as a note in the comment.
+      (d) Confidence level: Is the overall uncertainty stated at a defined confidence level?
+          95% is the IPMVP standard. If a different level is used, it must be justified.
+      (e) Savings range: Is the uncertainty expressed as a savings range (e.g., Savings Low
+          and Savings High in energy units) in addition to the percentage uncertainty? This is
+          best practice and expected per IPMVP.
+      Mark as APP if items (a), (b), and (d) are all present — flag (c) as a note in the
+      comment if the aggregation methodology is unexplained, but do not change the status.
+      Mark as IR if the overall uncertainty calculation is present but the modelling uncertainty
+      cannot be reconciled with the reported regression statistics and no explanation is provided.
+      Mark as NA if no overall uncertainty calculation is present at all.
 
 SECTION 12 – BUDGET
 12.1  Are M&V costs including costs of setup, data gathering, analysis, and reporting identified
@@ -578,6 +804,11 @@ SECTION 12 – BUDGET
 
 SECTION 13 – QUALITY ASSURANCE, FUTURE MEASUREMENTS AND RESOLVING DISPUTES
 13.1  Is a QA/QC procedure for reporting and documentation in place as per IPMVP?
+      DECISION RULE: APP if any QA/QC procedures are described — examples include: independent
+      verification of calculations, CMVP-certified professionals involved, data entry checks,
+      source data cross-checks, or review sign-off process. A comprehensive QA system is NOT
+      required for APP; any described procedure is sufficient.
+      IR only if no QA/QC procedures of any kind are described anywhere in the document.
 
 SECTION 14 – RISK ASSESSMENT
 14.1  Is the risk assessment comprehensive and does it cover all material technical, operational,
@@ -592,7 +823,27 @@ SECTION 15 – SUBSTITUTE METER MAPPING FOR FAILURE SCENARIO
 
 SECTION 16 – APPENDICES
 16.1  Does the appendix define the minimum required supporting documents?
-16.2  Is the list of raw data to be shared by the ESP during the M&V reporting period clearly defined and scoped to the relevant ECMs, related equipment, and building type (e.g., excluding chiller data for buildings without DCP)?
+16.2  Is the list of data to be shared by the ESP/ESCO during the M&V reporting period
+      clearly defined?
+      Check that the M&V Plan defines what data the ESP must submit for each reporting period,
+      consistent with the M&V Option and measurement approach selected for each ECM:
+      (a) Continuously metered ECMs (Option B or C): For ECMs measured with continuous or
+          interval metering (e.g., chillers, pumps, cooling towers, AHUs), the data list must
+          include specific data points, units, and measurement frequency. Confirm these are listed.
+      (b) Spot-measured ECMs (Option A): For ECMs where savings are based on spot measurements
+          (e.g., lighting retrofits), the reporting period data requirement is limited to
+          operating hours or a proxy variable — not ongoing power or energy raw data. A lighting
+          ECM does not require continuous power measurement data in the data list. Do not flag
+          the absence of lighting power raw data as a deficiency for Option A ECMs.
+      (c) Completeness relative to in-scope ECMs: Cross-check the data list against all ECMs
+          included in the M&V Plan. Flag only if a continuously metered ECM is entirely absent
+          from the data list without explanation.
+      If an IGA is uploaded: confirm the data list is consistent with the measurement approach
+      and data requirements described in the IGA.
+      Mark as NA if no data list is provided at all. Mark as IR if the list exists but is
+      missing data points for one or more continuously metered ECMs. Mark as APP if the list
+      covers all continuously metered ECMs with appropriate data points, units, and frequency,
+      even if spot-measured ECMs are not included in the ongoing data list.
 16.3  Are relevant equipment specifications included (e.g., chillers and major systems)?
 16.4  Where a chiller is presented as an ECM, are the required matrices or performance tables provided?
 16.5  Is all supporting data relevant to the M&V Plan included?
@@ -601,6 +852,30 @@ SECTION 17 – OVERALL COMPLIANCE
 17.1  Does the M&V Plan adhere to IPMVP standards?
       (references correct edition, uses consistent terminology, addresses all Section 13.1
       requirements, and is approved by all stakeholders)
+
+----------------------------------------
+MANDATORY STATUS SELF-CHECK
+----------------------------------------
+
+Before writing each status value, run through this checklist in order:
+
+1. APPROVAL RULES FIRST: Does this SN have a DECISION RULE stated in the question above?
+   If yes → apply that rule exactly. It overrides the general leniency guidance.
+
+2. CORE CONTENT TEST: Is the core substance of the requirement present in the document
+   (even if in a different section, table, or page than expected)?
+   If yes → lean APP. Location of content does not justify IR.
+
+3. MEANINGFUL ABSENCE TEST: Is something materially important — not just a minor detail —
+   genuinely missing from the entire document?
+   If no meaningful absence → APP.
+   If yes → IR.
+
+4. INTEGRITY TEST: Would the absence materially compromise M&V savings credibility?
+   If yes → NA (use sparingly — this should be rare in a submitted M&V Plan).
+
+5. LENIENCY FINAL CHECK: After assigning IR or NA, ask: "Would a reasonable senior M&V
+   reviewer approve this with a minor note?" If yes → downgrade to APP with a note in the comment.
 
 ----------------------------------------
 OUTPUT FORMAT

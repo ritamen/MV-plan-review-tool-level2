@@ -116,6 +116,27 @@ SECTION 6 — UNCERTAINTY TESTS
 6.1  Did the ESP include a separate sheet to quantify any uncertainty issues?
 
 ----------------------------------------
+SHEET 3 — MANDATORY APPROVAL OVERRIDES
+----------------------------------------
+
+⚠️ READ THIS BEFORE EVALUATING ANY SHEET 3 QUESTION. THESE RULES OVERRIDE ALL OTHER CRITERIA.
+
+A Sample M&V Report is a TEMPLATE submitted to demonstrate format — actual data is NOT
+expected to be populated. Blank tables, empty data rows, and unfilled placeholder values
+are NORMAL and do NOT justify IR or NA.
+
+MANDATORY RULE FOR SNs 1.2, 7.1, 8.1, 8.2:
+  STATUS = APP whenever the section structure, table template, or column headers are present,
+  regardless of whether data rows are populated.
+  DATA POPULATION IS NEVER REQUIRED FOR APP STATUS ON THESE SNs.
+  DO NOT mark IR or NA solely because tables are empty or values are missing.
+
+FOR ALL OTHER SHEET 3 SNs (0.1, 1.1, 2.1, 3.1, 4.1, 5.1, 6.1):
+  APP if the relevant section or heading exists in the report.
+  IR if the section is partially present or structurally incomplete.
+  NA only if the section is entirely absent with no placeholder.
+
+----------------------------------------
 SHEET 3 — SAMPLE M&V REPORT REVIEW
 ----------------------------------------
 
@@ -137,7 +158,12 @@ SECTION 1 — OVERVIEW OF M&V REPORT
 
 SECTION 2 — PROJECT BACKGROUND
 2.1  Did the ESP include a project overview, facility description, M&V option,
-     measurement boundary, target savings, and ECM intent as per the approved M&V Plan?
+     measurement boundary, target savings, and ECM intent?
+     DECISION RULE: APP if project overview, facility description, M&V option, measurement
+     boundary, and ECM intent are all present. Target savings may be referenced via an appendix
+     or summary table rather than stated inline — a reference is sufficient for APP.
+     IR only if one of the five core elements (overview, facility, option, boundary, ECM intent)
+     is entirely absent.
 
 SECTION 3 — M&V DATA COLLECTION ACTIVITIES CONDUCTED DURING THE CURRENT REPORTING PERIOD
 3.1  Did the ESP include, at a minimum, the start and end dates of the measurement
@@ -145,16 +171,87 @@ SECTION 3 — M&V DATA COLLECTION ACTIVITIES CONDUCTED DURING THE CURRENT REPORT
      details of operational verification activities conducted (if not yet reported)?
 3.2  Did the ESP include the key parameters collected during the reporting period
      (utility bills, 15-minute interval data, non-routine events)?
-     APPROVAL RULE: Approve if the section or table for key parameters is present. Do NOT require actual data to be populated — check for the presence of the section or column headers only.
+     Note: This is a sample M&V Report format review only. Actual data values are not
+     expected — the check is whether the correct section structure and placeholder content
+     are present.
+     Per IPMVP Section 13.3.3, the M&V Report must include a dedicated section on M&V data
+     collection activities conducted during the current reporting period. This section must
+     exist as a standalone section — data embedded only within calculation tables elsewhere
+     in the report does not satisfy this structural requirement.
+     Check that a dedicated M&V data collection section is present and demonstrates the
+     following structure, even with sample or placeholder data:
+     (a) Measurement period dates: A placeholder or sample start and end date for the
+         reporting period measurement window.
+     (b) Energy and performance data: A sample table or description showing the type of
+         metered values to be reported (e.g., kWh, TRh, kW/Ton) — actual values not required.
+     (c) Independent variables: A sample table or description showing the independent
+         variables to be reported alongside baseline comparisons (e.g., ambient temperature, LWT).
+     (d) Utility bills or billing data: A reference or placeholder showing that utility
+         billing data will be included or referenced.
+     (e) Non-routine events: A placeholder section or statement showing how non-routine
+         events will be reported or confirmed as absent.
+     Mark as NA if no data collection content is present anywhere in the report.
+     Mark as IR if the dedicated section is absent, or if any of items (a) through (e) is
+     missing from the structure.
+     Mark as APP only if a dedicated section exists demonstrating all five structural
+     elements above.
 
 SECTION 4 — BASELINE AND VARIABLES
 4.1  Did the ESP include, at a minimum, the Baseline Period (start and end dates,
      energy consumption data, utility billing cycles, energy costs calculated, and
      tariff rates used), as well as key parameter data collected (data for independent
      variables and static factors)?
+     Note: This is a sample M&V Report format review only. Actual baseline data values are
+     not required — the check is whether the correct section structure and placeholder content
+     are present.
+     Per IPMVP Section 13.3.3, the M&V Report must include a dedicated standalone section
+     titled "Baseline and Variables" or equivalent. Baseline data embedded only within
+     calculation tables or referenced indirectly from other sections does not satisfy this
+     structural requirement.
+     Check that a dedicated Baseline section exists and demonstrates the following structure,
+     even with sample or placeholder content:
+     (a) Baseline period dates: A placeholder or sample start and end date for the baseline
+         measurement period.
+     (b) Baseline energy consumption: A sample table or description showing baseline period
+         energy consumption data by ECM, utility type, or whole-facility level — actual values
+         not required, only the structure.
+     (c) Utility billing cycle: A reference or statement showing that the billing cycle used
+         for the baseline aligns with the utility billing period.
+     (d) Tariff rates: The applicable energy tariff rate(s) used to calculate baseline energy
+         costs, with a source reference or placeholder.
+     (e) Independent variables and static factors: A sample table or description showing the
+         independent variables (e.g., ambient temperature, TRh) and static factors recorded
+         during the baseline period.
+     Mark as NA if no baseline content is present anywhere in the report.
+     Mark as IR if a dedicated standalone Baseline section is absent, or if any of items
+     (a) through (e) is missing from the structure.
+     Mark as APP only if a dedicated standalone Baseline section exists and covers all five
+     structural elements above.
 
 SECTION 5 — ELECTRICITY COST
-5.1  Did the ESP include the applicable tariff rate structure as per the M&V Plan?
+5.1  Did the ESP include the applicable tariff rate structure?
+     Note: This is a sample M&V Report format review only. The check is whether the tariff
+     rate used for savings valuation is identified — not whether a full utility tariff schedule
+     is reproduced.
+     Check the following:
+     (a) Rate value stated: Is the applicable unit rate for each utility within the M&V boundary
+         clearly stated (e.g., AED/kWh for electricity, AED/IG or AED/m³ for water)? The rate
+         must appear in a dedicated tariff or electricity cost section, not only embedded within
+         calculation tables.
+     (b) Consistency with M&V Plan: Is the stated rate consistent with the tariff rate defined
+         in the approved M&V Plan? If a different rate is used without explanation, flag it.
+     (c) Tariff type identified: Is the tariff described as a flat rate, tiered rate, or
+         time-of-use rate? A flat unit rate is fully acceptable — no demand charge breakdown or
+         full utility authority schedule is required in the M&V Report.
+     The following are NOT required — do not flag their absence:
+       - A full reproduction of the utility authority tariff schedule
+       - Demand charge breakdown
+       - Time-of-use rate tables
+       - A formal annual price escalation calculation
+     Mark as NA if no tariff rate is stated anywhere in the report.
+     Mark as IR if a tariff section exists but the rate value is missing or cannot be identified.
+     Mark as APP if the applicable unit rate is clearly stated in a dedicated section, even as
+     a single flat rate.
 
 SECTION 6 — METERS
 6.1  Did the ESP include the list of utility meters or account numbers used for
@@ -176,6 +273,24 @@ SECTION 8 — VERIFIED SAVINGS
      APPROVAL RULE: Approve if the savings presentation table or section is present. Do NOT require actual data to be filled in — check for the presence of the table or section only. However, if sources of uncertainty are not mentioned anywhere in the report, flag this in the comment.
 8.2  Did the ESP include a summary of non-routine adjustments (NRAs) with monthly values?
      APPROVAL RULE: Approve if the NRA summary table or section is present. Do NOT require actual data or monthly values to be populated — check for the presence of the table or section only.
+
+----------------------------------------
+MANDATORY STATUS SELF-CHECK
+----------------------------------------
+
+Before writing each status value, run through this checklist in order:
+
+1. MANDATORY OVERRIDES FIRST: Does this SN have a MANDATORY RULE in the Sheet 3 overrides
+   section above? If yes → apply it exactly. It overrides everything else.
+
+2. PRESENCE TEST: Is the section, table structure, or placeholder present in the document?
+   If yes → APP (for Sheet 3, presence of structure is sufficient regardless of data content).
+
+3. PARTIAL TEST: Is something structurally incomplete (section exists but is missing key headers)?
+   If yes → IR.
+
+4. ABSENCE TEST: Is the section entirely absent with no placeholder or heading?
+   If yes → NA.
 
 ----------------------------------------
 OUTPUT FORMAT
