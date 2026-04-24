@@ -179,20 +179,18 @@ def _build_user_content(mv_bytes: bytes, supporting_bytes: list):
     return content
 
 def _call_claude(client, user_content: list) -> str:
-    import anthropic
-    response = client.messages.create(
+    with client.messages.stream(
         model=MODEL,
         max_tokens=MAX_TOKENS,
         temperature=1,
         thinking={"type": "enabled", "budget_tokens": THINKING_TOKENS},
         system=REVIEWER_PROMPT,
         messages=[{"role": "user", "content": user_content}],
-        timeout=TIMEOUT_SECS,
-    )
+    ) as stream:
+        response = stream.get_final_message()
     return _extract_json_text(response)
 
 def _call_claude_retry(client, user_content: list, first_raw: str) -> str:
-    import anthropic
     retry_messages = [
         {"role": "user",      "content": user_content},
         {"role": "assistant", "content": first_raw},
@@ -203,15 +201,15 @@ def _call_claude_retry(client, user_content: list, first_raw: str) -> str:
             "comment (string, empty if APP). Nothing else."
         )},
     ]
-    response = client.messages.create(
+    with client.messages.stream(
         model=MODEL,
         max_tokens=MAX_TOKENS,
         temperature=1,
         thinking={"type": "enabled", "budget_tokens": THINKING_TOKENS},
         system=REVIEWER_PROMPT,
         messages=retry_messages,
-        timeout=TIMEOUT_SECS,
-    )
+    ) as stream:
+        response = stream.get_final_message()
     return _extract_json_text(response)
 
 
@@ -263,21 +261,19 @@ def _build_calc_user_content(report_bytes: bytes) -> list:
 
 
 def _call_claude_calc(client, user_content: list) -> str:
-    import anthropic
-    response = client.messages.create(
+    with client.messages.stream(
         model=MODEL,
         max_tokens=MAX_TOKENS,
         temperature=1,
         thinking={"type": "enabled", "budget_tokens": THINKING_TOKENS},
         system=CALC_REVIEWER_PROMPT,
         messages=[{"role": "user", "content": user_content}],
-        timeout=TIMEOUT_SECS,
-    )
+    ) as stream:
+        response = stream.get_final_message()
     return _extract_json_text(response)
 
 
 def _call_claude_calc_retry(client, user_content: list, first_raw: str) -> str:
-    import anthropic
     retry_messages = [
         {"role": "user",      "content": user_content},
         {"role": "assistant", "content": first_raw},
@@ -288,15 +284,15 @@ def _call_claude_calc_retry(client, user_content: list, first_raw: str) -> str:
             "Nothing else."
         )},
     ]
-    response = client.messages.create(
+    with client.messages.stream(
         model=MODEL,
         max_tokens=MAX_TOKENS,
         temperature=1,
         thinking={"type": "enabled", "budget_tokens": THINKING_TOKENS},
         system=CALC_REVIEWER_PROMPT,
         messages=retry_messages,
-        timeout=TIMEOUT_SECS,
-    )
+    ) as stream:
+        response = stream.get_final_message()
     return _extract_json_text(response)
 
 
