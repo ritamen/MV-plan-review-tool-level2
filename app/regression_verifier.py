@@ -165,6 +165,12 @@ def verify_eem(
         }
 
     # ── Compare computed vs reported ─────────────────────────────────────────
+    # t_stat_slope is the key used when stats are extracted from the M&V plan;
+    # t_stat is accepted as an alias for programmatic callers.
+    rep_t_stat    = reported.get("t_stat") or reported.get("t_stat_slope")
+    rep_intercept = reported.get("intercept")
+    rep_slope     = reported.get("slope")
+
     comparison = {
         "R²": {
             "computed": computed["r_squared"],
@@ -176,10 +182,20 @@ def verify_eem(
             "reported": reported.get("cv_rmse"),
             "match":    _check_match(computed["cv_rmse"], reported.get("cv_rmse")),
         },
-        "t-statistic": {
+        "t-statistic (slope)": {
             "computed": computed["t_stat"],
-            "reported": reported.get("t_stat"),
-            "match":    _check_match(computed["t_stat"], reported.get("t_stat")),
+            "reported": rep_t_stat,
+            "match":    _check_match(computed["t_stat"], rep_t_stat),
+        },
+        "Intercept": {
+            "computed": computed["intercept"],
+            "reported": rep_intercept,
+            "match":    _check_match(computed["intercept"], rep_intercept),
+        },
+        "Slope": {
+            "computed": computed["slope"],
+            "reported": rep_slope,
+            "match":    _check_match(computed["slope"], rep_slope),
         },
         "p-value": {
             "computed": computed["p_value"],

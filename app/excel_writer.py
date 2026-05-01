@@ -262,9 +262,10 @@ def _write_section_rollups(ws, review_by_sn: dict) -> None:
 
 def _build_regression_comment(regression_results: list) -> str:
     """
-    Build a natural-language paragraph appended to SN 6.3.6 stating the
-    Python-computed regression values, whether they match reported stats,
-    and whether they meet IPMVP/ASHRAE Guideline 14 thresholds.
+    Build a structured block appended to SN 6.3.6 with three sections per EEM:
+      1. Plan-Reported Statistics (extracted from the M&V plan by AI)
+      2. Python-Computed Statistics (independent OLS on uploaded data file)
+      3. Comparison & Threshold Assessment
     """
     if not regression_results:
         return ""
@@ -274,8 +275,12 @@ def _build_regression_comment(regression_results: list) -> str:
         name = res.get("eem_name", "Unknown EEM")
 
         if res.get("error"):
+            err = str(res["error"]).lower()
+            if "zero" in err or "mean" in err:
+                continue  # no regression model for this series — skip silently
             blocks.append(
-                f"Independent Python regression verification ({name}) could not be completed: {res['error']}."
+                f"─── {name} ───\n"
+                f"Independent Python regression verification could not be completed: {res['error']}."
             )
             continue
 
@@ -288,63 +293,103 @@ def _build_regression_comment(regression_results: list) -> str:
         nmbe      = c.get("nmbe", 0)
         t_stat    = c.get("t_stat", 0)
         p_val     = c.get("p_value", 0)
-        it        = c.get("intercept_t_stat")
-        ip        = c.get("intercept_p_value")
         intercept = c.get("intercept", 0)
         slope     = c.get("slope", 0)
         mse       = c.get("model_std_err", 0)
         n         = c.get("n", 0)
 
-        p_str  = "< 0.001" if p_val < 0.001 else f"= {p_val:.3f}"
-        ip_str = ("< 0.001" if ip < 0.001 else f"= {ip:.4f}") if ip is not None else "N/A"
-        it_str = f"{it:.4f}" if it is not None else "N/A"
+        p_str = "< 0.001" if p_val < 0.001 else f"{p_val:.4f}"
 
-        # ── Threshold split ───────────────────────────────────────────────────
-        failing = [k for k, v in thresholds.items() if not v.get("passes")]
-        passing = [k for k, v in thresholds.items() if v.get("passes")]
-
-        # ── Match sentence ────────────────────────────────────────────────────
         has_reported = any(v.get("reported") is not None for v in comparison.values())
+
+        # ── Section 1: Plan-Reported Statistics ──────────────────────────────
         if has_reported:
-            mismatches = res.get("stats_mismatch", [])
-            match_clause = (
-                "consistent with those reported in the M&V Plan"
-                if not mismatches else
-                f"differing from the M&V Plan on: {', '.join(mismatches)}"
-            )
+            rep_lines = []
+            for metric, vals in comparison.items():
+                rep = vals.get("reported")
+                if rep is not None:
+                    if metric in ("R²",):
+                        rep_lines.append(f"  {metric} = {rep:.4f}")
+                    elif metric == "CV(RMSE) %":
+                        rep_lines.append(f"  {metric} = {rep:.2f}%")
+                    elif metric in ("t-statistic (slope)",):
+                        rep_lines.append(f"  {metric} = {rep:.4f}")
+                    elif metric in ("Intercept",):
+                        rep_lines.append(f"  {metric} = {rep:,.4f}")
+                    elif metric in ("Slope",):
+                        rep_lines.append(f"  {metric} = {rep:.6f}")
+                    else:
+                        rep_lines.append(f"  {metric} = {rep:.4g}")
+            plan_section = "Plan-Reported Statistics (extracted from M&V Plan):\n" + "\n".join(rep_lines)
         else:
-            match_clause = "no reported statistics were available for direct comparison"
+            plan_section = "Plan-Reported Statistics: Not found — no regression statistics table was extracted from the M&V Plan."
 
-        # ── Threshold clause ──────────────────────────────────────────────────
-        if not failing:
-            threshold_clause = "all meet IPMVP/ASHRAE Guideline 14 thresholds."
-        else:
-            pass_part = f"{', '.join(passing)} {'meet' if len(passing) > 1 else 'meets'} the required thresholds" if passing else ""
-            fail_part = f"{', '.join(failing)} {'do' if len(failing) > 1 else 'does'} not meet the required threshold"
-            threshold_clause = f"{pass_part + '; ' if pass_part else ''}{fail_part}."
-
-        # ── Mismatch detail sentence (only when reported stats exist) ──────────
-        mismatch_detail = ""
-        if has_reported and res.get("stats_mismatch"):
-            details = []
-            for metric in res["stats_mismatch"]:
-                rep = comparison[metric].get("reported")
-                comp = comparison[metric].get("computed")
-                if rep is not None and comp is not None:
-                    details.append(f"{metric}: reported {rep:.4g}, computed {comp:.4g}")
-            if details:
-                mismatch_detail = f" Discrepancies: {'; '.join(details)}."
-
-        # ── Assemble paragraph ────────────────────────────────────────────────
-        para = (
-            f"[{name}] Independent Python verification (n = {n}) yields: "
-            f"R² = {r2:.4f}, CV(RMSE) = {cvrmse:.2f}%, NMBE = {nmbe:.2f}%, "
-            f"slope t-statistic = {t_stat:.4f} (p {p_str}), "
-            f"Model Standard Error = {mse:,.2f}, intercept = {intercept:,.2f}, slope = {slope:.6f}. "
-            f"These values are {match_clause}.{mismatch_detail} {threshold_clause}"
+        # ── Section 2: Python-Computed Statistics ─────────────────────────────
+        python_section = (
+            f"Python-Computed Statistics (independent OLS, n = {n} data points):\n"
+            f"  R² = {r2:.4f}\n"
+            f"  CV(RMSE) = {cvrmse:.2f}%\n"
+            f"  NMBE = {nmbe:.2f}%\n"
+            f"  t-statistic (slope) = {t_stat:.4f}  (p = {p_str})\n"
+            f"  Intercept = {intercept:,.4f}\n"
+            f"  Slope = {slope:.6f}\n"
+            f"  Model Standard Error = {mse:,.2f}"
         )
 
-        blocks.append(para)
+        # ── Section 3: Comparison & Threshold Assessment ──────────────────────
+        if has_reported:
+            mismatches = res.get("stats_mismatch", [])
+            if not mismatches:
+                match_line = "Match vs. M&V Plan: MATCH — Python results are consistent with plan-reported values (within 2% tolerance)."
+            else:
+                detail_parts = []
+                for metric in mismatches:
+                    rep  = comparison[metric].get("reported")
+                    comp = comparison[metric].get("computed")
+                    if rep is not None and comp is not None:
+                        detail_parts.append(f"{metric}: plan = {rep:.4g}, Python = {comp:.4g}")
+                match_line = (
+                    "Match vs. M&V Plan: MISMATCH — discrepancies detected:\n"
+                    + "\n".join(f"  • {d}" for d in detail_parts)
+                )
+        else:
+            match_line = "Match vs. M&V Plan: N/A — no plan-reported statistics available for comparison."
+
+        threshold_lines = []
+        overall_pass = True
+        for criterion, vals in thresholds.items():
+            passes = vals.get("passes", False)
+            value  = vals.get("value")
+            thr    = vals.get("threshold", "")
+            flag   = "PASS" if passes else "FAIL"
+            if not passes:
+                overall_pass = False
+            if value is not None:
+                if "%" in criterion:
+                    threshold_lines.append(f"  {flag}  {criterion}: {value:.2f}%  (threshold {thr})")
+                elif criterion.startswith("R²"):
+                    threshold_lines.append(f"  {flag}  {criterion}: {value:.4f}  (threshold {thr})")
+                elif "t" in criterion.lower():
+                    threshold_lines.append(f"  {flag}  {criterion}: {value:.4f}  (threshold {thr})")
+                else:
+                    threshold_lines.append(f"  {flag}  {criterion}: {value:,.2f}  (threshold {thr})")
+            else:
+                threshold_lines.append(f"  {flag}  {criterion}  (threshold {thr})")
+
+        overall_label = "ALL THRESHOLDS MET" if overall_pass else "ONE OR MORE THRESHOLDS FAILED"
+        threshold_section = (
+            f"Threshold Assessment (IPMVP / ASHRAE Guideline 14) — {overall_label}:\n"
+            + "\n".join(threshold_lines)
+        )
+
+        block = (
+            f"─── Regression Verification: {name} ───\n\n"
+            f"{plan_section}\n\n"
+            f"{python_section}\n\n"
+            f"{match_line}\n\n"
+            f"{threshold_section}"
+        )
+        blocks.append(block)
 
     return "\n\n" + "\n\n".join(blocks)
 

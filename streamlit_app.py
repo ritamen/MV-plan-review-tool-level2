@@ -38,8 +38,8 @@ EXPECTED_SNS_SHEET3       = extract_expected_sns_for_sheet(str(TEMPLATE_PATH), "
 
 # ── API constants ─────────────────────────────────────────────────────────────
 MODEL           = "claude-sonnet-4-6"
-MAX_TOKENS      = 16000
-THINKING_TOKENS = 5000
+MAX_TOKENS      = 32000
+THINKING_TOKENS = 10000
 TIMEOUT_SECS    = 180
 MAX_PDF_PAGES   = 100
 MAX_SUPPORTING_TEXT_CHARS = 400_000
@@ -95,7 +95,11 @@ def _extract_json_text(response) -> str:
     for block in response.content:
         if block.type == "text":
             return block.text
-    raise ValueError("No text content block found in API response.")
+    block_types = [b.type for b in response.content]
+    raise ValueError(
+        f"No text content block found in API response. "
+        f"stop_reason={response.stop_reason!r}, blocks={block_types}"
+    )
 
 def _validate_items(items: list) -> list:
     errors = []
@@ -348,12 +352,31 @@ def run_mv_review(mv_bytes, supporting_bytes, ref_no, client_name, esp_name, mv_
 
     regression_results = []
     if regression_data:
-        # Inject reported_stats into each EEM dict so verify_eem() can compare
+        # Inject reported_stats into each EEM dict so verify_eem() can compare.
+        # Matching strategy: exact name → case-insensitive → positional fallback.
         if reported_by_eem:
-            for d in regression_data:
-                name = d.get("eem_name", "")
-                if name in reported_by_eem:
-                    d["reported_stats"] = reported_by_eem[name]
+            reported_names = list(reported_by_eem.keys())
+            for i, d in enumerate(regression_data):
+                excel_name = d.get("eem_name", "")
+                if excel_name in reported_by_eem:
+                    d["reported_stats"] = reported_by_eem[excel_name]
+                else:
+                    ci_match = next(
+                        (k for k in reported_names if k.lower() == excel_name.lower()),
+                        None,
+                    )
+                    if ci_match:
+                        d["reported_stats"] = reported_by_eem[ci_match]
+                        d["eem_name"] = ci_match
+                    elif i < len(reported_names):
+                        # Positional fallback: pair by order when names differ
+                        plan_name = reported_names[i]
+                        d["reported_stats"] = reported_by_eem[plan_name]
+                        d["eem_name"] = plan_name
+                        logging.info(
+                            "EEM positional match: Excel EEM %d ('%s') paired with plan EEM '%s'.",
+                            i, excel_name, plan_name,
+                        )
         try:
             regression_results = verify_all(regression_data)
             logging.info("Regression verified for %d EEM(s).", len(regression_results))
